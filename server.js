@@ -47,6 +47,7 @@ const ZOOM_MEETING_ID = String(process.env.ZOOM_MEETING_ID || '').replace(/\D/g,
 const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
 const ZOOM_SDK_KEY = process.env.ZOOM_SDK_KEY || '';
 const ZOOM_SDK_SECRET = process.env.ZOOM_SDK_SECRET || '';
+const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || '';
 const STATIC_FILES = new Map([
   ['/', 'index.html'],
   ['/index.html', 'index.html'],
@@ -121,6 +122,50 @@ async function writeRegistration(entry) {
   const registrations = await readRegistrations();
   registrations.push(entry);
   await fs.writeFile(REGISTRATIONS_FILE, JSON.stringify(registrations, null, 2), 'utf8');
+}
+
+async function storeRegistration(entry) {
+  if (GOOGLE_APPS_SCRIPT_URL) {
+    const payload = {
+      fullName: entry.fullName,
+      email: entry.email,
+      phone: entry.phone,
+      workshopName: entry.workshopName || '',
+      date: entry.createdAt
+    };
+
+    try {
+      const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        return {
+          stored: false,
+          storageNote: `Failed to store in Google Sheets: ${response.status} ${text}`.trim()
+        };
+      }
+
+      return {
+        stored: true,
+        storageNote: 'Stored in Google Sheets via Apps Script.'
+      };
+    } catch (error) {
+      return {
+        stored: false,
+        storageNote: `Error sending to Apps Script: ${error.message}`
+      };
+    }
+  }
+
+  await writeRegistration(entry);
+  return {
+    stored: true,
+    storageNote: 'Stored locally in data/registrations.json.'
+  };
 }
 
 function base64UrlEncode(value) {
@@ -330,20 +375,31 @@ const server = http.createServer(async (req, res) => {
         fullName,
         email,
         phone,
+        workshopName: String(body.workshopName || '').trim(),
         createdAt: new Date().toISOString(),
         workshopStartsAt: status.startsAt
       };
 
-      await writeRegistration(entry);
+      const { stored, storageNote } = await storeRegistration(entry);
+
+      if (GOOGLE_APPS_SCRIPT_URL && !stored) {
+        sendJson(res, 502, {
+          error: storageNote || 'Unable to store registration in Google Sheets.',
+          stored,
+          storageNote
+        });
+        return;
+      }
 
       sendJson(res, 200, {
         ok: true,
-        stored: true,
         status,
         registration: entry,
         meetingNumber: ZOOM_MEETING_ID,
         meetingPassword: ZOOM_MEETING_PASSWORD,
-        sdkReady: Boolean(ZOOM_SDK_KEY && ZOOM_SDK_SECRET)
+        sdkReady: Boolean(ZOOM_SDK_KEY && ZOOM_SDK_SECRET),
+        storageNote,
+        stored
       });
       return;
     } catch (error) {

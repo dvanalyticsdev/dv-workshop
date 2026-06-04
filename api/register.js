@@ -78,6 +78,15 @@ module.exports = async function registerHandler(req, res) {
       global.__DV_REGISTRATIONS = arr;
     }
 
+    if (GOOGLE_APPS_SCRIPT_URL && !stored) {
+      sendJson(res, 502, {
+        error: storageNote || 'Unable to store registration in Google Sheets.',
+        stored,
+        storageNote
+      });
+      return;
+    }
+
     sendJson(res, 200, {
       ok: true,
       stored,
