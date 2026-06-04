@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>Joining Zoom Meeting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style-light.css">
+</head>
+<body class="meeting-body">
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-grid"></div>
+
+  <main class="meeting-shell glass-shell" id="meetingShell">
+    <div class="meeting-copy">
+      <img src="Logos/DV-Logo.png" alt="DV Analytics" class="meeting-logo">
+      <p class="hero-kicker">Zoom meeting</p>
+      <h1>Connecting you to the live session</h1>
+      <p class="meeting-status" id="meetingStatus">Preparing the secure Zoom room.</p>
+    </div>
+
+    <div class="meeting-card glass-shell">
+      <div class="meeting-card-inner">
+        <span class="meeting-pill">Automatic join</span>
+        <strong id="meetingName">Loading your name...</strong>
+        <p>Do not close this tab while Zoom initializes.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://source.zoom.us/6.0.2/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/6.0.2/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/6.0.2/lib/vendor/react-redux.min.js"></script>
+  <script src="https://source.zoom.us/6.0.2/lib/vendor/redux.min.js"></script>
+  <script src="https://source.zoom.us/6.0.2/lib/vendor/redux-thunk.min.js"></script>
+  <script src="https://source.zoom.us/6.0.2/zoom-meeting-6.0.2.min.js"></script>
+  <script src="meeting.js"></script>
+</body>
+</html>

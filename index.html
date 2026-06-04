@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>DV Analytics Workshop | Join the Session</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style-light.css">
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-grid"></div>
+
+  <header class="topbar glass-shell">
+    <div class="brand-wrap">
+      <img src="Logos/DV-Logo.png" alt="DV Analytics" class="brand-logo">
+    </div>
+    <a href="#join" class="nav-action">Join Workshop</a>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero">
+      <div class="hero-visual glass-shell" id="poster">
+        <div class="hero-copy">
+          <p class="hero-kicker">Live Zoom workshop</p>
+        </div>
+
+        <div class="poster-frame poster-frame-wide">
+          <img src="Logos/Poster.jpeg" alt="DV Analytics SAS Base & Advanced Programming workshop poster" class="poster-image">
+        </div>
+
+        <div class="hero-actions hero-actions-center">
+          <a href="#join" class="primary-btn">Join Workshop</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <section class="modal hidden" id="joinModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card glass-shell" role="dialog" aria-modal="true" aria-labelledby="joinTitle">
+      <button class="close-btn" type="button" aria-label="Close form" data-close-modal>&times;</button>
+
+      <div class="modal-header">
+        <p class="modal-kicker">Join Workshop</p>
+        <h2 id="joinTitle">Reserve your seat in seconds</h2>
+        <p id="modalMessage">
+          Enter your details and we will take you straight into Zoom when the meeting is live.
+        </p>
+      </div>
+
+      <p class="form-instruction">To claim your post workshop certificate please fill your details correctly.</p>
+
+      <form id="registrationForm" class="register-form">
+        <label>
+          <span>Workshop Name</span>
+          <input type="text" id="workshopName" name="workshopName" placeholder="Workshop Name" disabled readonly>
+        </label>
+        <label>
+          <span>Full Name</span>
+          <input type="text" id="fullName" name="fullName" placeholder="Enter your full name" autocomplete="name" required>
+        </label>
+        <label>
+          <span>Email ID</span>
+          <input type="email" id="email" name="email" placeholder="Enter your email address" autocomplete="email" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" required>
+        </label>
+        <label>
+          <span>Phone Number</span>
+          <input type="tel" id="phone" name="phone" placeholder="Enter your 10-digit phone number" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required>
+        </label>
+
+        <button type="submit" class="primary-btn form-btn" id="submitBtn">Submit & Continue</button>
+        <p class="form-feedback" id="formFeedback"></p>
+      </form>
+    </div>
+  </section>
+
+  <section class="waiting-popup hidden" id="waitingPopup" aria-hidden="true" aria-live="polite">
+    <div class="waiting-popup-card glass-shell" role="status">
+      <p class="waiting-popup-copy" id="waitingPopupCopy">Kindly wait for the meeting to start.</p>
+    </div>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>

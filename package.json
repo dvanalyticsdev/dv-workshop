@@ -1,0 +1,13 @@
+{
+  "name": "dv-workshop-landing-page",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Glassmorphism landing page for the DV Analytics workshop",
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {},
+  "scripts": {
+    "dev": "node server.js"
+  }
+}
