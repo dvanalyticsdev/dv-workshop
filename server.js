@@ -83,17 +83,37 @@ const COLLECTION_NAME = 'attendees';
 let mongoClient = null;
 let db = null;
 let attendeesCollection = null;
-let mongoConnectionFailed = false; // Attempt connection only once
+let mongoConnectionFailed = false; // Set to true only if credentials are completely missing
+let lastConnectAttemptTime = 0;
+const CONNECT_COOLDOWN_MS = 10000; // 10s cooldown between retries
 
 async function connectMongo() {
-  if (db) return db;
-  if (mongoConnectionFailed) return null; // Already failed — skip silently
+  if (db) {
+    // If the connection topology is destroyed or disconnected, trigger reconnect
+    if (mongoClient && (!mongoClient.topology || mongoClient.topology.isDestroyed())) {
+      console.warn('MongoDB topology was closed or destroyed. Reconnecting...');
+      db = null;
+      mongoClient = null;
+      attendeesCollection = null;
+    } else {
+      return db;
+    }
+  }
+
+  if (mongoConnectionFailed) return null; // Credentials missing
 
   if (!MONGO_HOST || !MONGO_USER || !MONGO_PASS) {
     console.warn('MongoDB credentials not set in .env — using local file storage.');
     mongoConnectionFailed = true;
     return null;
   }
+
+  // Rate limit connection attempts during transient db downtime
+  const now = Date.now();
+  if (now - lastConnectAttemptTime < CONNECT_COOLDOWN_MS) {
+    return null;
+  }
+  lastConnectAttemptTime = now;
 
   // Build the SRV URL without embedding credentials (avoids all encoding issues)
   const connectionUrl = `mongodb+srv://${MONGO_HOST}/?appName=${encodeURIComponent(MONGO_APP_NAME)}`;
@@ -105,8 +125,8 @@ async function connectMongo() {
         username: MONGO_USER,
         password: MONGO_PASS   // Raw plain-text password — no encoding needed here
       },
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000
     });
     await mongoClient.connect();
     // Confirm the connection is live
@@ -125,11 +145,14 @@ async function connectMongo() {
     console.log(`✓ MongoDB connected — db: "${DB_NAME}" | collection: "${COLLECTION_NAME}"`);
     return db;
   } catch (error) {
-    mongoConnectionFailed = true;
     console.error(`✗ MongoDB connection failed — falling back to local file storage.`);
     console.error(`  Host   : ${MONGO_HOST}`);
     console.error(`  User   : ${MONGO_USER}`);
     console.error(`  Reason : ${error.message}`);
+    // Clear variables so next invocation can try connecting again
+    db = null;
+    mongoClient = null;
+    attendeesCollection = null;
   }
   return null;
 }
@@ -231,6 +254,11 @@ async function enrichRegistrationsWithCounselors(registrations) {
     }
   } catch (error) {
     console.error('Failed to enrich registrations with counselor data:', error);
+    if (error.name === 'MongoTopologyClosedError' || error.message.includes('Topology is closed')) {
+      db = null;
+      mongoClient = null;
+      attendeesCollection = null;
+    }
     for (const reg of registrations) {
       reg.counselor = 'Unassigned';
     }
@@ -286,6 +314,11 @@ async function readRegistrations() {
     }
   } catch (error) {
     console.error('MongoDB readRegistrations failed, falling back to local files:', error);
+    if (error.name === 'MongoTopologyClosedError' || error.message.includes('Topology is closed')) {
+      db = null;
+      mongoClient = null;
+      attendeesCollection = null;
+    }
   }
 
   if (process.env.VERCEL) {
@@ -350,6 +383,11 @@ async function writeRegistration(entry) {
     }
   } catch (error) {
     console.error('MongoDB write failed, falling back to local file:', error.message);
+    if (error.name === 'MongoTopologyClosedError' || error.message.includes('Topology is closed')) {
+      db = null;
+      mongoClient = null;
+      attendeesCollection = null;
+    }
   }
 
   // --- Fallback: Vercel in-memory store ---
@@ -625,6 +663,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { ok: true, message: 'Attendance list cleared successfully.' });
       return;
     } catch (error) {
+      if (error.name === 'MongoTopologyClosedError' || error.message.includes('Topology is closed')) {
+        db = null;
+        mongoClient = null;
+        attendeesCollection = null;
+      }
       sendJson(res, 500, { error: error.message || 'Unable to clear list.' });
       return;
     }
