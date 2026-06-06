@@ -9,7 +9,151 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style-light.css">
+  <script>
+    (function() {
+      const auth = sessionStorage.getItem('attendance_auth');
+      if (auth === 'dv@dev@2010@analytics') {
+        document.documentElement.classList.add('is-authenticated');
+      } else {
+        document.documentElement.classList.add('needs-auth');
+      }
+    })();
+  </script>
   <style>
+    /* Auth CSS Rules */
+    html.needs-auth .topbar,
+    html.needs-auth .dashboard-shell {
+      display: none !important;
+    }
+    html.is-authenticated .password-screen {
+      display: none !important;
+    }
+
+    /* Password Screen Styling */
+    .password-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 106, 26, 0.15), transparent 30%),
+        radial-gradient(circle at right 18%, rgba(75, 123, 255, 0.15), transparent 28%),
+        linear-gradient(145deg, #f5f7fb, #edf2f8);
+      opacity: 1;
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .password-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .password-card {
+      width: min(420px, 100%);
+      padding: 36px;
+      border-radius: var(--radius-xl);
+      text-align: center;
+      animation: cardEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes cardEntrance {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    .password-logo {
+      width: 180px;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 8px 16px rgba(18, 32, 51, 0.08));
+    }
+    .password-header h2 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin: 0 0 10px;
+      color: var(--text);
+    }
+    .password-header p {
+      font-size: 0.92rem;
+      line-height: 1.5;
+      color: var(--muted);
+      margin: 0 0 28px;
+    }
+    .password-form {
+      display: grid;
+      gap: 16px;
+    }
+    .input-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .password-form input {
+      width: 100%;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--text);
+      padding: 16px 48px 16px 18px;
+      outline: none;
+      transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+      font-size: 1rem;
+    }
+    .password-form input:focus {
+      border-color: var(--accent);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(255, 106, 26, 0.12);
+    }
+    .toggle-password-btn {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      padding: 4px;
+      cursor: pointer;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 150ms ease;
+    }
+    .toggle-password-btn:hover {
+      color: var(--text);
+    }
+    .error-msg {
+      margin: 4px 0 0;
+      color: #ef4444;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-align: left;
+    }
+    .error-msg.shake {
+      animation: shake 0.4s ease;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    .password-form .form-btn {
+      width: 100%;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), #ff8e55);
+      color: #fff;
+      box-shadow: 0 16px 36px rgba(255, 106, 26, 0.22);
+      font-weight: 800;
+      transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+    }
+    .password-form .form-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 40px rgba(255, 106, 26, 0.3);
+    }
+
     /* Dashboard Specific Overrides and Enhancements */
     .dashboard-shell {
       width: min(1280px, calc(100% - 24px));
@@ -299,6 +443,30 @@
   <div class="bg-orb orb-1"></div>
   <div class="bg-orb orb-2"></div>
   <div class="bg-grid"></div>
+
+  <!-- Password Protection Screen -->
+  <div id="passwordScreen" class="password-screen">
+    <div class="password-card glass-shell">
+      <div class="password-header">
+        <img src="Logos/DV-Logo.png" alt="DV Analytics" class="password-logo">
+        <h2>Host Portal Login</h2>
+        <p>Enter the password to access the workshop dashboard.</p>
+      </div>
+      <form id="passwordForm" class="password-form">
+        <div class="input-wrapper">
+          <input type="password" id="passwordInput" placeholder="Password" required autocomplete="current-password">
+          <button type="button" id="togglePasswordBtn" class="toggle-password-btn" aria-label="Toggle password visibility">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="eyeIcon">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </div>
+        <button type="submit" class="primary-btn form-btn" id="passwordSubmitBtn">Verify & Access</button>
+        <p class="error-msg hidden" id="passwordError">Incorrect password. Please try again.</p>
+      </form>
+    </div>
+  </div>
 
   <header class="topbar glass-shell">
     <div class="brand-wrap">

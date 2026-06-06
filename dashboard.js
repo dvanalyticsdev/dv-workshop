@@ -433,6 +433,72 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- Password Protection Logic ---
+  const passwordScreen = document.getElementById('passwordScreen');
+  const passwordForm = document.getElementById('passwordForm');
+  const passwordInput = document.getElementById('passwordInput');
+  const passwordError = document.getElementById('passwordError');
+  const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+
+  function setupAuth() {
+    // Password visibility toggle
+    if (togglePasswordBtn && passwordInput) {
+      togglePasswordBtn.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        // Toggle eye icon paths
+        const eyeOpenSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const eyeClosedSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+        
+        togglePasswordBtn.innerHTML = type === 'password' ? eyeOpenSvg : eyeClosedSvg;
+      });
+    }
+
+    if (passwordForm) {
+      passwordForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pwd = passwordInput.value;
+        const correctPassword = 'dv@dev@2010@analytics';
+
+        if (pwd === correctPassword) {
+          // Success!
+          passwordError.classList.add('hidden');
+          sessionStorage.setItem('attendance_auth', correctPassword);
+          
+          // Animate transition
+          if (passwordScreen) {
+            passwordScreen.classList.add('fade-out');
+            setTimeout(() => {
+              document.documentElement.classList.remove('needs-auth');
+              document.documentElement.classList.add('is-authenticated');
+              passwordScreen.style.display = 'none';
+            }, 400); // matches fade-out duration
+          } else {
+            document.documentElement.classList.remove('needs-auth');
+            document.documentElement.classList.add('is-authenticated');
+          }
+          
+          // Load data
+          fetchAttendance();
+        } else {
+          // Failure
+          passwordError.classList.remove('hidden');
+          passwordError.classList.remove('shake');
+          void passwordError.offsetWidth; // trigger reflow to restart animation
+          passwordError.classList.add('shake');
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      });
+    }
+  }
+
   // Initialize
-  fetchAttendance();
+  const authVal = sessionStorage.getItem('attendance_auth');
+  if (authVal === 'dv@dev@2010@analytics') {
+    fetchAttendance();
+  } else {
+    setupAuth();
+  }
 });
