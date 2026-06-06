@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const tableBody = document.getElementById('tableBody');
   const searchInput = document.getElementById('searchInput');
   const workshopFilter = document.getElementById('workshopFilter');
+  const counselorFilter = document.getElementById('counselorFilter');
   const dateFilter = document.getElementById('dateFilter');
   const timeFilter = document.getElementById('timeFilter');
   const timeFilterCondition = document.getElementById('timeFilterCondition');
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statAttended = document.getElementById('statAttended');
   const statAvgDuration = document.getElementById('statAvgDuration');
   const statCertified = document.getElementById('statCertified');
+  const counselorBreakdownList = document.getElementById('counselorBreakdownList');
 
   const exportCsvBtn = document.getElementById('exportCsv');
   const exportExcelBtn = document.getElementById('exportExcel');
@@ -27,17 +29,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await response.json();
       attendees = data.registrations || [];
       
-      // Dynamically populate Workshop dropdown options
+      // Dynamically populate dropdown options
       populateWorkshops();
+      populateCounselors();
 
       filteredAttendees = [...attendees];
       calculateMetrics();
       renderTable();
+      renderCounselorBreakdown();
     } catch (error) {
       console.error(error);
       tableBody.innerHTML = `
         <tr>
-          <td colspan="7" style="text-align: center; color: var(--accent); padding: 40px; font-weight: 700;">
+          <td colspan="8" style="text-align: center; color: var(--accent); padding: 40px; font-weight: 700;">
             Failed to load attendance list. Please verify the backend server is running.
           </td>
         </tr>
@@ -60,6 +64,65 @@ document.addEventListener('DOMContentLoaded', () => {
       option.textContent = w;
       workshopFilter.appendChild(option);
     });
+  }
+
+  // Populate dynamic Counselor filter list
+  function populateCounselors() {
+    const counselors = new Set();
+    attendees.forEach(a => {
+      counselors.add(a.counselor || 'Unassigned');
+    });
+
+    counselorFilter.innerHTML = '<option value="all">All Counselors</option>';
+    // Sort counselors (Unassigned last or alphabetical)
+    const sortedCounselors = Array.from(counselors).sort((a, b) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    });
+    sortedCounselors.forEach(c => {
+      const option = document.createElement('option');
+      option.value = c;
+      option.textContent = c;
+      counselorFilter.appendChild(option);
+    });
+  }
+
+  // Render Counselor Breakdown dynamic cards
+  function renderCounselorBreakdown() {
+    const stats = {};
+    filteredAttendees.forEach(a => {
+      const c = a.counselor || 'Unassigned';
+      if (!stats[c]) {
+        stats[c] = { total: 0, attended: 0 };
+      }
+      stats[c].total++;
+      if ((a.joinedDuration || 0) > 0) {
+        stats[c].attended++;
+      }
+    });
+
+    if (filteredAttendees.length === 0) {
+      counselorBreakdownList.innerHTML = '<div style="color: var(--muted); padding: 10px; font-size: 0.9rem;">No data for current filters</div>';
+      return;
+    }
+
+    const sortedCounselors = Object.keys(stats).sort((a, b) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    });
+
+    counselorBreakdownList.innerHTML = sortedCounselors.map(c => {
+      const s = stats[c];
+      return `
+        <div class="counselor-stat-pill">
+          <span class="counselor-stat-name">${escapeHtml(c)}</span>
+          <span class="counselor-stat-count">${s.total} <span style="font-size: 0.8rem; font-weight: 500; color: var(--muted);">joined</span></span>
+          <span class="counselor-stat-attended">${s.attended} attended</span>
+        </div>
+      `;
+    }).join('');
   }
 
   // Calculate Metrics
@@ -114,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (filteredAttendees.length === 0) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="7" class="empty-state">
+          <td colspan="8" class="empty-state">
             <h3>No participants found</h3>
             <p>Try resetting the filters or adjusting your search query.</p>
           </td>
@@ -124,18 +187,57 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    tableBody.innerHTML = filteredAttendees.map(a => `
-      <tr>
-        <td style="font-weight: 600;">${escapeHtml(a.fullName)}</td>
-        <td>${escapeHtml(a.email)}</td>
-        <td>${escapeHtml(a.phone)}</td>
-        <td>${escapeHtml(a.workshopName || 'N/A')}</td>
-        <td>${formatDateTime(a.createdAt)}</td>
-        <td>${formatDuration(a.joinedDuration)}</td>
-        <td>${getStatusBadge(a.joinedDuration)}</td>
-      </tr>
-    `).join('');
+    // Sort by Counselor, then by name
+    const sorted = [...filteredAttendees].sort((a, b) => {
+      const cA = a.counselor || 'Unassigned';
+      const cB = b.counselor || 'Unassigned';
+      if (cA === cB) {
+        return a.fullName.localeCompare(b.fullName);
+      }
+      if (cA === 'Unassigned') return 1;
+      if (cB === 'Unassigned') return -1;
+      return cA.localeCompare(cB);
+    });
 
+    let html = [];
+    let currentCounselor = null;
+
+    // Calculate count per counselor in the filtered view for headers
+    const counselorCounts = {};
+    sorted.forEach(a => {
+      const c = a.counselor || 'Unassigned';
+      counselorCounts[c] = (counselorCounts[c] || 0) + 1;
+    });
+
+    sorted.forEach(a => {
+      const c = a.counselor || 'Unassigned';
+      if (c !== currentCounselor) {
+        currentCounselor = c;
+        const count = counselorCounts[c];
+        html.push(`
+          <tr class="counselor-group-row">
+            <td colspan="8" class="counselor-group-cell">
+              Counselor: ${escapeHtml(currentCounselor)} (${count} matched)
+            </td>
+          </tr>
+        `);
+      }
+
+      html.push(`
+        <tr>
+          <td style="font-weight: 600;">${escapeHtml(a.fullName)}</td>
+          <td>${escapeHtml(a.email)}</td>
+          <td>${escapeHtml(a.phone)}</td>
+          <td>${escapeHtml(a.workshopName || 'N/A')}</td>
+          <td><span style="font-weight: 600; color: var(--accent-2);">${escapeHtml(a.counselor || 'Unassigned')}</span></td>
+          <td>${formatDateTime(a.createdAt)}</td>
+          <td>${formatDuration(a.joinedDuration)}</td>
+          <td>${getStatusBadge(a.joinedDuration)}</td>
+        </tr>
+      `);
+    });
+
+    tableBody.innerHTML = html.join('');
     filterStatus.textContent = `Showing ${filteredAttendees.length} of ${attendees.length} records`;
   }
 
@@ -143,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function applyFilters() {
     const query = searchInput.value.toLowerCase().trim();
     const workshopVal = workshopFilter.value;
+    const counselorVal = counselorFilter.value;
     const dateVal = dateFilter.value; // YYYY-MM-DD
     const timeVal = timeFilter.value; // HH:MM
     const timeCond = timeFilterCondition.value;
@@ -153,19 +256,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const matchQuery = 
         a.fullName.toLowerCase().includes(query) ||
         a.email.toLowerCase().includes(query) ||
-        a.phone.includes(query);
+        a.phone.includes(query) ||
+        (a.counselor && a.counselor.toLowerCase().includes(query));
 
       // 2. Workshop Filter
       const matchWorkshop = (workshopVal === 'all' || a.workshopName === workshopVal);
 
-      // 3. Date Filter
+      // 3. Counselor Filter
+      const matchCounselor = (counselorVal === 'all' || (a.counselor || 'Unassigned') === counselorVal);
+
+      // 4. Date Filter
       let matchDate = true;
       if (dateVal) {
         const itemDate = new Date(a.createdAt).toLocaleDateString('en-CA'); // YYYY-MM-DD
         matchDate = (itemDate === dateVal);
       }
 
-      // 4. Time Filter
+      // 5. Time Filter
       let matchTime = true;
       if (timeVal && timeCond !== 'none') {
         const itemTime = new Date(a.createdAt).toTimeString().slice(0, 5); // "HH:MM"
@@ -176,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 5. Duration Filter
+      // 6. Duration Filter
       const duration = a.joinedDuration || 0;
       let matchDuration = true;
       if (durationOption === 'certified') {
@@ -187,10 +294,11 @@ document.addEventListener('DOMContentLoaded', () => {
         matchDuration = duration < 15;
       }
 
-      return matchQuery && matchWorkshop && matchDate && matchTime && matchDuration;
+      return matchQuery && matchWorkshop && matchCounselor && matchDate && matchTime && matchDuration;
     });
 
     renderTable();
+    renderCounselorBreakdown();
   }
 
   // Dynamic Export function (CSV / Excel format)
@@ -198,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dataList = filteredAttendees.length > 0 ? filteredAttendees : attendees;
     
     // Header columns matching table header
-    const headers = ['Name', 'Email Address', 'Phone Number', 'Workshop Name', 'Joined Date & Time', 'Total Joined Duration (Minutes)'];
+    const headers = ['Name', 'Email Address', 'Phone Number', 'Workshop Name', 'Counselor', 'Joined Date & Time', 'Total Joined Duration (Minutes)'];
     
     // Transform rows
     const rows = dataList.map(a => [
@@ -206,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `"${a.email.replace(/"/g, '""')}"`,
       `"${a.phone}"`,
       `"${(a.workshopName || 'N/A').replace(/"/g, '""')}"`,
+      `"${(a.counselor || 'Unassigned').replace(/"/g, '""')}"`,
       `"${formatDateTime(a.createdAt)}"`,
       a.joinedDuration || 0
     ]);
@@ -227,7 +336,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <Cell><Data ss:Type="String">${escapeXml(r[2].replace(/"/g, ''))}</Data></Cell>
           <Cell><Data ss:Type="String">${escapeXml(r[3].replace(/"/g, ''))}</Data></Cell>
           <Cell><Data ss:Type="String">${escapeXml(r[4].replace(/"/g, ''))}</Data></Cell>
-          <Cell><Data ss:Type="Number">${r[5]}</Data></Cell>
+          <Cell><Data ss:Type="String">${escapeXml(r[5].replace(/"/g, ''))}</Data></Cell>
+          <Cell><Data ss:Type="Number">${r[6]}</Data></Cell>
         </Row>
       `).join('');
 
@@ -245,6 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <Cell><Data ss:Type="String">Email Address</Data></Cell>
     <Cell><Data ss:Type="String">Phone Number</Data></Cell>
     <Cell><Data ss:Type="String">Workshop Name</Data></Cell>
+    <Cell><Data ss:Type="String">Counselor</Data></Cell>
     <Cell><Data ss:Type="String">Joined Date & Time</Data></Cell>
     <Cell><Data ss:Type="String">Joined Duration (Minutes)</Data></Cell>
    </Row>
@@ -290,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event Listeners
   searchInput.addEventListener('input', applyFilters);
   workshopFilter.addEventListener('change', applyFilters);
+  counselorFilter.addEventListener('change', applyFilters);
   dateFilter.addEventListener('input', applyFilters);
   timeFilter.addEventListener('input', applyFilters);
   timeFilterCondition.addEventListener('change', applyFilters);

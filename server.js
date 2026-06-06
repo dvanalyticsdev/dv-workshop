@@ -193,6 +193,51 @@ function humanDuration(ms) {
   return `${s} sec`;
 }
 
+function getCore10Digits(phone) {
+  if (!phone) return '';
+  const clean = String(phone).replace(/\D/g, '');
+  return clean.slice(-10);
+}
+
+async function enrichRegistrationsWithCounselors(registrations) {
+  if (!registrations || registrations.length === 0) return registrations;
+
+  try {
+    // Attempt to connect to Mongo if not connected
+    await connectMongo();
+    if (mongoClient) {
+      const crmDb = mongoClient.db('i-crm-workshop');
+      const stateDoc = await crmDb.collection('app_state').findOne({});
+      const leadMap = new Map();
+      if (stateDoc && Array.isArray(stateDoc.leads)) {
+        for (const lead of stateDoc.leads) {
+          if (lead.phone && lead.counselor) {
+            const corePhone = getCore10Digits(lead.phone);
+            if (corePhone) {
+              leadMap.set(corePhone, lead.counselor);
+            }
+          }
+        }
+      }
+
+      for (const reg of registrations) {
+        const corePhone = getCore10Digits(reg.phone);
+        reg.counselor = leadMap.get(corePhone) || 'Unassigned';
+      }
+    } else {
+      for (const reg of registrations) {
+        reg.counselor = 'Unassigned';
+      }
+    }
+  } catch (error) {
+    console.error('Failed to enrich registrations with counselor data:', error);
+    for (const reg of registrations) {
+      reg.counselor = 'Unassigned';
+    }
+  }
+  return registrations;
+}
+
 function getWorkshopStatus() {
   const now      = new Date();
   const startsAt = getWorkshopStartDate();
@@ -553,12 +598,14 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname === '/api/registrations') {
     const registrations = await readRegistrations();
+    await enrichRegistrationsWithCounselors(registrations);
     sendJson(res, 200, { count: registrations.length, registrations });
     return;
   }
 
   if (req.method === 'GET' && pathname === '/api/attendance') {
     const registrations = await readRegistrations();
+    await enrichRegistrationsWithCounselors(registrations);
     sendJson(res, 200, { registrations });
     return;
   }

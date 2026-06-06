@@ -202,15 +202,76 @@
       color: var(--muted);
     }
 
-    .empty-state {
-      padding: 48px;
-      text-align: center;
-      color: var(--muted);
-    }
-
     .empty-state h3 {
       margin: 0 0 8px;
       color: var(--text);
+    }
+
+    /* Counselor Breakdown & Separator Rows */
+    .counselor-breakdown-card {
+      background: var(--glass);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .counselor-stat-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .counselor-stat-pill {
+      background: rgba(255, 255, 255, 0.45);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    .counselor-stat-pill:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(18, 32, 51, 0.05);
+      background: rgba(255, 255, 255, 0.65);
+    }
+
+    .counselor-stat-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .counselor-stat-count {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.1;
+    }
+
+    .counselor-stat-attended {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .counselor-group-row {
+      background: rgba(75, 123, 255, 0.04) !important;
+    }
+
+    .counselor-group-cell {
+      font-weight: 700;
+      font-size: 0.92rem;
+      color: var(--accent-2);
+      border-bottom: 1px solid var(--line);
+      background: rgba(75, 123, 255, 0.04);
+      padding: 14px 24px !important;
     }
 
     @media (max-width: 768px) {
@@ -277,6 +338,14 @@
       </div>
     </div>
 
+    <!-- Counselor Breakdown -->
+    <div class="counselor-breakdown-card">
+      <h2 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 16px; font-weight: 700; color: var(--text);">Counselor Breakdown</h2>
+      <div id="counselorBreakdownList" class="counselor-stat-list">
+        <!-- Dynamically populated counselor pills -->
+      </div>
+    </div>
+
     <!-- Filters & Actions -->
     <div class="dashboard-controls glass-shell" style="gap: 20px;">
       <div class="search-filter-group" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); display: grid; width: 100%;">
@@ -288,6 +357,12 @@
           <label for="workshopFilter">Workshop Name</label>
           <select id="workshopFilter" class="control-input">
             <option value="all">All Workshops</option>
+          </select>
+        </div>
+        <div class="control-item">
+          <label for="counselorFilter">Counselor</label>
+          <select id="counselorFilter" class="control-input">
+            <option value="all">All Counselors</option>
           </select>
         </div>
         <div class="control-item">
@@ -344,6 +419,7 @@
             <th>Email Address</th>
             <th>Phone Number</th>
             <th>Workshop</th>
+            <th>Counselor</th>
             <th>Joined Time</th>
             <th>Total Joined Duration</th>
             <th>Attendance Status</th>
@@ -352,7 +428,7 @@
         <tbody id="tableBody">
           <!-- Populated by dashboard.js -->
           <tr>
-            <td colspan="7" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
+            <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
           </tr>
         </tbody>
       </table>
