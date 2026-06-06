@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = 50;
   const WORKSHOP_TIMEZONE = 'Asia/Kolkata';
   const WORKSHOP_OFFSET_MINUTES = 330;
 
