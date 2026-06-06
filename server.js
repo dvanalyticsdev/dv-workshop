@@ -48,6 +48,7 @@ loadEnvFile(ENV_FILE);
 
 const DATA_DIR = path.join(ROOT, 'data');
 const REGISTRATIONS_FILE = path.join(DATA_DIR, 'registrations.json');
+const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
 const PORT = Number(process.env.PORT || 3000);
 const ZOOM_MEETING_ID = String(process.env.ZOOM_MEETING_ID || '').replace(/\D/g, '');
 const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
@@ -266,21 +267,113 @@ async function enrichRegistrationsWithCounselors(registrations) {
   return registrations;
 }
 
-function getWorkshopStatus() {
-  const now      = new Date();
-  const startsAt = getWorkshopStartDate();
-  const msRemaining = startsAt.getTime() - now.getTime();
-  const isLive   = msRemaining <= 0;
+function formatTimeInTimezone(date, tz) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(date));
+  } catch (err) {
+    console.error('Error formatting time in timezone:', err);
+    return '';
+  }
+}
+
+async function readSchedule() {
+  if (process.env.VERCEL) {
+    if (global.__DV_SCHEDULE) return global.__DV_SCHEDULE;
+  }
+  try {
+    const raw = await fs.readFile(SCHEDULE_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    // Calculate defaults from env variables
+    const startObj = getWorkshopStartDate();
+    const endObj = new Date(startObj.getTime() + 2 * 60 * 60 * 1000); // 2 hours default
+    const defaults = {
+      startTime: startObj.toISOString(),
+      endTime: endObj.toISOString()
+    };
+    if (!process.env.VERCEL) {
+      try {
+        await fs.mkdir(DATA_DIR, { recursive: true });
+        await fs.writeFile(SCHEDULE_FILE, JSON.stringify(defaults, null, 2), 'utf8');
+      } catch (err) {
+        console.error('Failed to write default schedule:', err);
+      }
+    } else {
+      global.__DV_SCHEDULE = defaults;
+    }
+    return defaults;
+  }
+}
+
+async function writeSchedule(schedule) {
+  if (process.env.VERCEL) {
+    global.__DV_SCHEDULE = schedule;
+    return;
+  }
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(SCHEDULE_FILE, JSON.stringify(schedule, null, 2), 'utf8');
+}
+
+async function getWorkshopStatus() {
+  const schedule = await readSchedule();
+  const now = new Date();
+  
+  if (!schedule.startTime || !schedule.endTime) {
+    return {
+      startsAt: '',
+      startTimeLabel: '',
+      endTimeLabel: '',
+      isLive: false,
+      status: 'off',
+      msRemaining: 0,
+      timeRemaining: null,
+      message: 'Workshop registration is closed (schedule not set).'
+    };
+  }
+
+  const start = new Date(schedule.startTime);
+  const end = new Date(schedule.endTime);
+  const nowMs = now.getTime();
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+
+  let isLive = false;
+  let status = 'off';
+  let message = '';
+  let timeRemaining = null;
+  let msRemaining = 0;
+
+  if (nowMs < startMs) {
+    isLive = false;
+    status = 'waiting';
+    msRemaining = startMs - nowMs;
+    timeRemaining = humanDuration(msRemaining);
+    const label = formatTimeInTimezone(start, WORKSHOP_TIMEZONE);
+    message = `Workshop starts at ${label}. Please wait.`;
+  } else if (nowMs >= startMs && nowMs <= endMs) {
+    isLive = true;
+    status = 'live';
+    message = 'The workshop is live now. Join the Zoom session.';
+  } else {
+    isLive = false;
+    status = 'ended';
+    message = 'The workshop registration has ended.';
+  }
 
   return {
-    startsAt: startsAt.toISOString(),
-    startTimeLabel: isLive ? 'Live now' : WORKSHOP_START_TIME,
+    startsAt: start.toISOString(),
+    startTimeLabel: isLive ? 'Live now' : formatTimeInTimezone(start, WORKSHOP_TIMEZONE),
+    endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
     isLive,
+    status,
     msRemaining: isLive ? 0 : msRemaining,
-    timeRemaining: isLive ? null : humanDuration(msRemaining),
-    message: isLive
-      ? 'The workshop is live now. Join the Zoom session.'
-      : `Workshop starts at ${WORKSHOP_START_TIME}. Please wait.`
+    timeRemaining: isLive ? null : timeRemaining,
+    message
   };
 }
 
@@ -630,7 +723,8 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = requestUrl;
 
   if (req.method === 'GET' && pathname === '/api/status') {
-    sendJson(res, 200, getWorkshopStatus());
+    const status = await getWorkshopStatus();
+    sendJson(res, 200, status);
     return;
   }
 
@@ -673,6 +767,44 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === 'POST' && pathname === '/api/schedule') {
+    try {
+      const body = await readBody(req);
+      const { startTime, endTime } = body;
+
+      if (!startTime || !endTime) {
+        sendJson(res, 400, { error: 'Start time and end time are required.' });
+        return;
+      }
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        sendJson(res, 400, { error: 'Invalid date or time format.' });
+        return;
+      }
+
+      if (start.getTime() >= end.getTime()) {
+        sendJson(res, 400, { error: 'Start time must be before end time.' });
+        return;
+      }
+
+      const schedule = {
+        startTime: start.toISOString(),
+        endTime: end.toISOString()
+      };
+
+      await writeSchedule(schedule);
+
+      const status = await getWorkshopStatus();
+      sendJson(res, 200, { ok: true, schedule, status });
+      return;
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || 'Unable to update schedule.' });
+      return;
+    }
+  }
+
   if (req.method === 'POST' && pathname === '/api/signature') {
     try {
       const body = await readBody(req);
@@ -710,7 +842,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const status = getWorkshopStatus();
+      const status = await getWorkshopStatus();
       if (!status.isLive) {
         sendJson(res, 400, {
           error: `Workshop has not started yet. ${status.timeRemaining} remaining.`,

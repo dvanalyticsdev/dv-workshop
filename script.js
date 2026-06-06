@@ -159,8 +159,12 @@ registrationForm.addEventListener('submit', async (event) => {
     if (!response.ok) {
       if (result && result.status && !result.status.isLive) {
         closeModal();
-        const start12 = formatTime12Hour(result.status.startTimeLabel);
-        openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
+        if (result.status.status === 'ended') {
+          openWaitingPopup(`This workshop registration has ended.`);
+        } else {
+          const start12 = formatTime12Hour(result.status.startTimeLabel);
+          openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
+        }
         return;
       }
       throw new Error(result?.error || `Registration failed (${response.status})`);

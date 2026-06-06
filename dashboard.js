@@ -481,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           // Load data
           fetchAttendance();
+          fetchSchedule();
         } else {
           // Failure
           passwordError.classList.remove('hidden');
@@ -494,10 +495,128 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // --- Schedule Gate Settings Logic ---
+  const scheduleForm = document.getElementById('scheduleForm');
+  const scheduleStartDate = document.getElementById('scheduleStartDate');
+  const scheduleStartTime = document.getElementById('scheduleStartTime');
+  const scheduleEndDate = document.getElementById('scheduleEndDate');
+  const scheduleEndTime = document.getElementById('scheduleEndTime');
+  const registrationStatusPill = document.getElementById('registrationStatusPill');
+  const saveScheduleBtn = document.getElementById('saveScheduleBtn');
+
+  function splitIsoToLocalDateAndTime(isoString) {
+    if (!isoString) return { date: '', time: '' };
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return { date: '', time: '' };
+    
+    const pad = num => String(num).padStart(2, '0');
+    return {
+      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
+    };
+  }
+
+  async function fetchSchedule() {
+    try {
+      const response = await fetch('/api/status');
+      if (!response.ok) throw new Error('Failed to fetch schedule');
+      const data = await response.json();
+
+      if (data.startTime) {
+        const startParts = splitIsoToLocalDateAndTime(data.startTime);
+        scheduleStartDate.value = startParts.date;
+        scheduleStartTime.value = startParts.time;
+      }
+      if (data.endTime) {
+        const endParts = splitIsoToLocalDateAndTime(data.endTime);
+        scheduleEndDate.value = endParts.date;
+        scheduleEndTime.value = endParts.time;
+      }
+
+      updateStatusPill(data.isLive);
+    } catch (err) {
+      console.error('Error fetching schedule:', err);
+    }
+  }
+
+  function updateStatusPill(isLive) {
+    if (isLive) {
+      registrationStatusPill.textContent = 'Active (ON)';
+      registrationStatusPill.className = 'status-badge badge-on';
+    } else {
+      registrationStatusPill.textContent = 'Inactive (OFF)';
+      registrationStatusPill.className = 'status-badge badge-off';
+    }
+  }
+
+  if (scheduleForm) {
+    scheduleForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const startDateVal = scheduleStartDate.value;
+      const startTimeVal = scheduleStartTime.value;
+      const endDateVal = scheduleEndDate.value;
+      const endTimeVal = scheduleEndTime.value;
+      
+      if (!startDateVal || !startTimeVal || !endDateVal || !endTimeVal) {
+        alert('Please select all date and time fields.');
+        return;
+      }
+
+      const startTime = new Date(`${startDateVal}T${startTimeVal}`).toISOString();
+      const endTime = new Date(`${endDateVal}T${endTimeVal}`).toISOString();
+
+      if (new Date(startTime) >= new Date(endTime)) {
+        alert('Start time must be before end time.');
+        return;
+      }
+
+      try {
+        saveScheduleBtn.disabled = true;
+        saveScheduleBtn.textContent = 'Saving...';
+
+        const response = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ startTime, endTime })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Failed to save schedule');
+        }
+
+        const data = await response.json();
+        alert('Schedule saved successfully.');
+        
+        if (data.schedule.startTime) {
+          const startParts = splitIsoToLocalDateAndTime(data.schedule.startTime);
+          scheduleStartDate.value = startParts.date;
+          scheduleStartTime.value = startParts.time;
+        }
+        if (data.schedule.endTime) {
+          const endParts = splitIsoToLocalDateAndTime(data.schedule.endTime);
+          scheduleEndDate.value = endParts.date;
+          scheduleEndTime.value = endParts.time;
+        }
+        updateStatusPill(data.status.isLive);
+      } catch (err) {
+        console.error('Error saving schedule:', err);
+        alert(err.message);
+      } finally {
+        saveScheduleBtn.disabled = false;
+        saveScheduleBtn.textContent = 'Save Schedule';
+      }
+    });
+  }
+
   // Initialize
   const authVal = sessionStorage.getItem('attendance_auth');
   if (authVal === 'dv@dev@2010@analytics') {
     fetchAttendance();
+    fetchSchedule();
   } else {
     setupAuth();
   }
