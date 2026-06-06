@@ -319,6 +319,38 @@
       background: rgba(255, 255, 255, 0.25);
     }
 
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      border-top: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.22);
+      flex-wrap: wrap;
+    }
+
+    .pagination-summary {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .pagination-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-page {
+      font-size: 0.82rem;
+      color: var(--text);
+      font-weight: 700;
+      min-width: 110px;
+      text-align: center;
+    }
+
     /* Badges */
     .status-badge {
       display: inline-flex;
@@ -671,6 +703,14 @@
           </tr>
         </tbody>
       </table>
+      <div class="pagination-bar">
+        <span id="paginationSummary" class="pagination-summary">Loading records...</span>
+        <div class="pagination-actions">
+          <button id="prevPageBtn" class="export-btn" type="button">Previous</button>
+          <span id="pageIndicator" class="pagination-page">Page 1 of 1</span>
+          <button id="nextPageBtn" class="export-btn" type="button">Next</button>
+        </div>
+      </div>
     </div>
   </main>
 

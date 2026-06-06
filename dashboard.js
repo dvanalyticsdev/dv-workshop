@@ -1,6 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const PAGE_SIZE = 100;
+  const WORKSHOP_TIMEZONE = 'Asia/Kolkata';
+  const WORKSHOP_OFFSET_MINUTES = 330;
+
   let attendees = [];
   let filteredAttendees = [];
+  let schedulesCache = [];
+  let currentPage = 1;
 
   const tableBody = document.getElementById('tableBody');
   const searchInput = document.getElementById('searchInput');
@@ -11,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const timeFilterCondition = document.getElementById('timeFilterCondition');
   const durationFilter = document.getElementById('durationFilter');
   const filterStatus = document.getElementById('filterStatus');
+  const paginationSummary = document.getElementById('paginationSummary');
+  const pageIndicator = document.getElementById('pageIndicator');
+  const prevPageBtn = document.getElementById('prevPageBtn');
+  const nextPageBtn = document.getElementById('nextPageBtn');
 
   const statTotal = document.getElementById('statTotal');
   const statAttended = document.getElementById('statAttended');
@@ -27,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch('/api/attendance');
       if (!response.ok) throw new Error('Failed to fetch attendance data');
       const data = await response.json();
-      attendees = data.registrations || [];
+      attendees = normalizeAttendanceRecords(data.registrations || []);
       
       // Dynamically populate dropdown options
       populateWorkshops();
@@ -35,8 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       filteredAttendees = [...attendees];
       calculateMetrics();
-      renderTable();
-      renderCounselorBreakdown();
+      applyFilters();
     } catch (error) {
       console.error(error);
       tableBody.innerHTML = `
@@ -47,6 +56,139 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       `;
     }
+  }
+
+  function normalizeAttendanceRecords(records) {
+    return records.map(record => {
+      const effectiveJoinedDuration = getEffectiveJoinedDuration(record);
+      return {
+        ...record,
+        effectiveJoinedDuration
+      };
+    });
+  }
+
+  function getEffectiveJoinedDuration(record) {
+    const storedDuration = Math.max(0, Number(record.joinedDuration) || 0);
+    const createdMs = new Date(record.createdAt).getTime();
+    const lastSeenMs = record.lastSeenAt ? new Date(record.lastSeenAt).getTime() : createdMs;
+
+    if (Number.isNaN(createdMs)) {
+      return storedDuration;
+    }
+
+    const scheduleStartMs = getScheduleStartForRecord(record);
+    if (!scheduleStartMs) {
+      return storedDuration;
+    }
+
+    const effectiveStartMs = Math.max(createdMs, scheduleStartMs);
+    const effectiveEndMs = Number.isNaN(lastSeenMs) ? createdMs : Math.max(lastSeenMs, createdMs);
+
+    if (effectiveEndMs < effectiveStartMs) {
+      return 0;
+    }
+
+    const windowMinutes = Math.floor((effectiveEndMs - effectiveStartMs) / 60000) + 1;
+    return Math.min(storedDuration, Math.max(0, windowMinutes));
+  }
+
+  function getScheduleStartForRecord(record) {
+    const recordMs = new Date(record.createdAt).getTime();
+    const startCandidates = [];
+
+    if (record.workshopStartsAt) {
+      const workshopStartMs = new Date(record.workshopStartsAt).getTime();
+      if (!Number.isNaN(workshopStartMs)) {
+        startCandidates.push(workshopStartMs);
+      }
+    }
+
+    const sameDaySchedule = schedulesCache.find(schedule => {
+      const startMs = new Date(schedule.startTime).getTime();
+      const endMs = new Date(schedule.endTime).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(endMs) || Number.isNaN(recordMs)) {
+        return false;
+      }
+      return isSameWorkshopDay(record.createdAt, schedule.startTime) || (recordMs >= startMs && recordMs <= endMs);
+    });
+
+    if (sameDaySchedule) {
+      const scheduleStartMs = new Date(sameDaySchedule.startTime).getTime();
+      if (!Number.isNaN(scheduleStartMs)) {
+        startCandidates.push(scheduleStartMs);
+      }
+    }
+
+    if (startCandidates.length === 0) {
+      return null;
+    }
+
+    return Math.max(...startCandidates);
+  }
+
+  function isSameWorkshopDay(isoA, isoB) {
+    return getDateKeyInTimezone(isoA) === getDateKeyInTimezone(isoB);
+  }
+
+  function getDateKeyInTimezone(dateLike) {
+    const d = new Date(dateLike);
+    if (Number.isNaN(d.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: WORKSHOP_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(d);
+    const mapped = {};
+    parts.forEach(part => {
+      if (part.type !== 'literal') {
+        mapped[part.type] = part.value;
+      }
+    });
+    return `${mapped.year}-${mapped.month}-${mapped.day}`;
+  }
+
+  function getTimePartsInTimezone(dateLike) {
+    const d = new Date(dateLike);
+    if (Number.isNaN(d.getTime())) {
+      return { year: '', month: '', day: '', hour: '', minute: '' };
+    }
+
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: WORKSHOP_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(d);
+
+    const mapped = {};
+    parts.forEach(part => {
+      if (part.type !== 'literal') {
+        mapped[part.type] = part.value;
+      }
+    });
+
+    return mapped;
+  }
+
+  function splitIsoToWorkshopDateAndTime(isoString) {
+    const parts = getTimePartsInTimezone(isoString);
+    if (!parts.year) return { date: '', time: '' };
+    return {
+      date: `${parts.year}-${parts.month}-${parts.day}`,
+      time: `${parts.hour}:${parts.minute}`
+    };
+  }
+
+  function workshopLocalToIso(dateString, timeString) {
+    const [year, month, day] = dateString.split('-').map(Number);
+    const [hour, minute] = timeString.split(':').map(Number);
+    const utcMs = Date.UTC(year, month - 1, day, hour, minute, 0, 0) - (WORKSHOP_OFFSET_MINUTES * 60 * 1000);
+    return new Date(utcMs).toISOString();
   }
 
   // Populate dynamic Workshop filter list
@@ -97,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stats[c] = { total: 0, attended: 0 };
       }
       stats[c].total++;
-      if ((a.joinedDuration || 0) > 0) {
+      if ((a.effectiveJoinedDuration || 0) > 0) {
         stats[c].attended++;
       }
     });
@@ -128,10 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Calculate Metrics
   function calculateMetrics() {
     const total = attendees.length;
-    const attended = attendees.filter(a => (a.joinedDuration || 0) > 0).length;
-    const certified = attendees.filter(a => (a.joinedDuration || 0) >= 60).length;
+    const attended = attendees.filter(a => (a.effectiveJoinedDuration || 0) > 0).length;
+    const certified = attendees.filter(a => (a.effectiveJoinedDuration || 0) >= 60).length;
     
-    const totalDuration = attendees.reduce((acc, a) => acc + (a.joinedDuration || 0), 0);
+    const totalDuration = attendees.reduce((acc, a) => acc + (a.effectiveJoinedDuration || 0), 0);
     const avgDuration = attended > 0 ? Math.round(totalDuration / attended) : 0;
 
     statTotal.textContent = total;
@@ -155,8 +297,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return '-';
     
-    const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    const timePart = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+    const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: WORKSHOP_TIMEZONE });
+    const timePart = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: WORKSHOP_TIMEZONE });
     return `${datePart} at ${timePart}`;
   }
 
@@ -184,6 +326,10 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       `;
       filterStatus.textContent = "Showing 0 records";
+      paginationSummary.textContent = 'No records to paginate';
+      pageIndicator.textContent = 'Page 1 of 1';
+      prevPageBtn.disabled = true;
+      nextPageBtn.disabled = true;
       return;
     }
 
@@ -199,6 +345,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return cA.localeCompare(cB);
     });
 
+    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+    if (currentPage > totalPages) {
+      currentPage = totalPages;
+    }
+
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    const endIndex = Math.min(startIndex + PAGE_SIZE, sorted.length);
+    const pageRows = sorted.slice(startIndex, endIndex);
+
     let html = [];
     let currentCounselor = null;
 
@@ -209,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
       counselorCounts[c] = (counselorCounts[c] || 0) + 1;
     });
 
-    sorted.forEach(a => {
+    pageRows.forEach(a => {
       const c = a.counselor || 'Unassigned';
       if (c !== currentCounselor) {
         currentCounselor = c;
@@ -231,14 +386,18 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${escapeHtml(a.workshopName || 'N/A')}</td>
           <td><span style="font-weight: 600; color: var(--accent-2);">${escapeHtml(a.counselor || 'Unassigned')}</span></td>
           <td>${formatDateTime(a.createdAt)}</td>
-          <td>${formatDuration(a.joinedDuration)}</td>
-          <td>${getStatusBadge(a.joinedDuration)}</td>
+          <td>${formatDuration(a.effectiveJoinedDuration)}</td>
+          <td>${getStatusBadge(a.effectiveJoinedDuration)}</td>
         </tr>
       `);
     });
 
     tableBody.innerHTML = html.join('');
     filterStatus.textContent = `Showing ${filteredAttendees.length} of ${attendees.length} records`;
+    paginationSummary.textContent = `Rows ${startIndex + 1}-${endIndex} of ${sorted.length}`;
+    pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+    prevPageBtn.disabled = currentPage === 1;
+    nextPageBtn.disabled = currentPage === totalPages;
   }
 
   // Apply Filter & Search
@@ -268,14 +427,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // 4. Date Filter
       let matchDate = true;
       if (dateVal) {
-        const itemDate = new Date(a.createdAt).toLocaleDateString('en-CA'); // YYYY-MM-DD
+        const itemDate = getDateKeyInTimezone(a.createdAt);
         matchDate = (itemDate === dateVal);
       }
 
       // 5. Time Filter
       let matchTime = true;
       if (timeVal && timeCond !== 'none') {
-        const itemTime = new Date(a.createdAt).toTimeString().slice(0, 5); // "HH:MM"
+        const parts = getTimePartsInTimezone(a.createdAt);
+        const itemTime = `${parts.hour || '00'}:${parts.minute || '00'}`;
         if (timeCond === 'after') {
           matchTime = (itemTime >= timeVal);
         } else if (timeCond === 'before') {
@@ -284,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // 6. Duration Filter
-      const duration = a.joinedDuration || 0;
+      const duration = a.effectiveJoinedDuration || 0;
       let matchDuration = true;
       if (durationOption === 'certified') {
         matchDuration = duration >= 60;
@@ -297,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return matchQuery && matchWorkshop && matchCounselor && matchDate && matchTime && matchDuration;
     });
 
+    currentPage = 1;
     renderTable();
     renderCounselorBreakdown();
   }
@@ -316,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `"${(a.workshopName || 'N/A').replace(/"/g, '""')}"`,
       `"${(a.counselor || 'Unassigned').replace(/"/g, '""')}"`,
       `"${formatDateTime(a.createdAt)}"`,
-      a.joinedDuration || 0
+      a.effectiveJoinedDuration || 0
     ]);
 
     let content = '';
@@ -406,6 +567,19 @@ document.addEventListener('DOMContentLoaded', () => {
   timeFilter.addEventListener('input', applyFilters);
   timeFilterCondition.addEventListener('change', applyFilters);
   durationFilter.addEventListener('change', applyFilters);
+  prevPageBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      renderTable();
+    }
+  });
+  nextPageBtn.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(filteredAttendees.length / PAGE_SIZE));
+    if (currentPage < totalPages) {
+      currentPage++;
+      renderTable();
+    }
+  });
 
   exportCsvBtn.addEventListener('click', () => exportData('csv'));
   exportExcelBtn.addEventListener('click', () => exportData('excel'));
@@ -504,26 +678,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const registrationStatusPill = document.getElementById('registrationStatusPill');
   const saveScheduleBtn = document.getElementById('saveScheduleBtn');
 
-  function splitIsoToLocalDateAndTime(isoString) {
-    if (!isoString) return { date: '', time: '' };
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return { date: '', time: '' };
-    
-    const pad = num => String(num).padStart(2, '0');
-    return {
-      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
-    };
-  }
-
   async function fetchSchedule() {
     try {
       const response = await fetch('/api/status');
       if (!response.ok) throw new Error('Failed to fetch schedule');
       const data = await response.json();
+      schedulesCache = Array.isArray(data.schedules) ? data.schedules : [];
+      attendees = normalizeAttendanceRecords(attendees);
+      calculateMetrics();
+      applyFilters();
 
       if (data.startTime) {
-        const startParts = splitIsoToLocalDateAndTime(data.startTime);
+        const startParts = splitIsoToWorkshopDateAndTime(data.startTime);
         scheduleStartDate.value = startParts.date;
         scheduleStartTime.value = startParts.time;
       } else {
@@ -531,7 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleStartTime.value = '';
       }
       if (data.endTime) {
-        const endParts = splitIsoToLocalDateAndTime(data.endTime);
+        const endParts = splitIsoToWorkshopDateAndTime(data.endTime);
         scheduleEndDate.value = endParts.date;
         scheduleEndTime.value = endParts.time;
       } else {
@@ -541,8 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       updateStatusPill(data.isLive);
 
-      const schedules = data.schedules || [];
-      renderSchedulesList(schedules, data.id, data.isLive);
+      renderSchedulesList(schedulesCache, data.id, data.isLive);
     } catch (err) {
       console.error('Error fetching schedule:', err);
     }
@@ -555,9 +720,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return { dateStr: '-', timeStr: '-', durationStr: '' };
     }
 
-    const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    const startTimeStr = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
-    const endTimeStr = end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+    const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: WORKSHOP_TIMEZONE });
+    const startTimeStr = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: WORKSHOP_TIMEZONE });
+    const endTimeStr = end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: WORKSHOP_TIMEZONE });
 
     const diffMins = Math.round((end.getTime() - start.getTime()) / 60000);
     let durationStr = '';
@@ -593,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!todaysList || !upcomingList) return;
 
     const now = new Date();
-    const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD local calendar date
+    const todayStr = getDateKeyInTimezone(now);
 
     const todaysSchedules = [];
     const upcomingSchedules = [];
@@ -601,8 +766,8 @@ document.addEventListener('DOMContentLoaded', () => {
     schedules.forEach(s => {
       const start = new Date(s.startTime);
       const end = new Date(s.endTime);
-      const startDayStr = start.toLocaleDateString('en-CA');
-      const endDayStr = end.toLocaleDateString('en-CA');
+      const startDayStr = getDateKeyInTimezone(start);
+      const endDayStr = getDateKeyInTimezone(end);
 
       if (startDayStr === todayStr || endDayStr === todayStr) {
         todaysSchedules.push(s);
@@ -724,8 +889,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const startTime = new Date(`${startDateVal}T${startTimeVal}`).toISOString();
-      const endTime = new Date(`${endDateVal}T${endTimeVal}`).toISOString();
+      const startTime = workshopLocalToIso(startDateVal, startTimeVal);
+      const endTime = workshopLocalToIso(endDateVal, endTimeVal);
 
       if (new Date(startTime) >= new Date(endTime)) {
         alert('Start time must be before end time.');
@@ -753,16 +918,21 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Schedule saved successfully.');
         
         if (data.schedule.startTime) {
-          const startParts = splitIsoToLocalDateAndTime(data.schedule.startTime);
+          const startParts = splitIsoToWorkshopDateAndTime(data.schedule.startTime);
           scheduleStartDate.value = startParts.date;
           scheduleStartTime.value = startParts.time;
         }
         if (data.schedule.endTime) {
-          const endParts = splitIsoToLocalDateAndTime(data.schedule.endTime);
+          const endParts = splitIsoToWorkshopDateAndTime(data.schedule.endTime);
           scheduleEndDate.value = endParts.date;
           scheduleEndTime.value = endParts.time;
         }
         updateStatusPill(data.status.isLive);
+        schedulesCache = Array.isArray(data.schedules) ? data.schedules : schedulesCache;
+        attendees = normalizeAttendanceRecords(attendees);
+        calculateMetrics();
+        applyFilters();
+        renderSchedulesList(schedulesCache, data.status.id, data.status.isLive);
       } catch (err) {
         console.error('Error saving schedule:', err);
         alert(err.message);
