@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let filteredAttendees = [];
   let schedulesCache = [];
   let currentPage = 1;
+  let isAttendanceLoading = true;
 
   const tableBody = document.getElementById('tableBody');
   const searchInput = document.getElementById('searchInput');
@@ -31,8 +32,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const exportCsvBtn = document.getElementById('exportCsv');
   const exportExcelBtn = document.getElementById('exportExcel');
 
+  function renderAttendanceLoadingState() {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
+      </tr>
+    `;
+    filterStatus.textContent = 'Loading records...';
+    paginationSummary.textContent = 'Loading records...';
+    pageIndicator.textContent = 'Page 1 of 1';
+    prevPageBtn.disabled = true;
+    nextPageBtn.disabled = true;
+  }
+
   // Fetch Attendance Data
   async function fetchAttendance() {
+    isAttendanceLoading = true;
+    renderAttendanceLoadingState();
+
     try {
       const response = await fetch('/api/attendance');
       if (!response.ok) throw new Error('Failed to fetch attendance data');
@@ -45,8 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       filteredAttendees = [...attendees];
       calculateMetrics();
+      isAttendanceLoading = false;
       applyFilters();
     } catch (error) {
+      isAttendanceLoading = false;
       console.error(error);
       tableBody.innerHTML = `
         <tr>
@@ -55,6 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
         </tr>
       `;
+      filterStatus.textContent = 'Unable to load records';
+      paginationSummary.textContent = 'Unable to load records';
+      pageIndicator.textContent = 'Page 1 of 1';
+      prevPageBtn.disabled = true;
+      nextPageBtn.disabled = true;
     }
   }
 
@@ -316,6 +340,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Render Table Rows
   function renderTable() {
+    if (isAttendanceLoading) {
+      renderAttendanceLoadingState();
+      return;
+    }
+
     if (filteredAttendees.length === 0) {
       tableBody.innerHTML = `
         <tr>
@@ -326,12 +355,15 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       `;
       filterStatus.textContent = "Showing 0 records";
-      paginationSummary.textContent = 'No records to paginate';
-      pageIndicator.textContent = 'Page 1 of 1';
-      prevPageBtn.disabled = true;
-      nextPageBtn.disabled = true;
+      paginationSummary.textContent = '';
+      pageIndicator.textContent = '';
+      prevPageBtn.hidden = true;
+      nextPageBtn.hidden = true;
       return;
     }
+
+    prevPageBtn.hidden = false;
+    nextPageBtn.hidden = false;
 
     // Sort by Counselor, then by name
     const sorted = [...filteredAttendees].sort((a, b) => {
@@ -686,7 +718,9 @@ document.addEventListener('DOMContentLoaded', () => {
       schedulesCache = Array.isArray(data.schedules) ? data.schedules : [];
       attendees = normalizeAttendanceRecords(attendees);
       calculateMetrics();
-      applyFilters();
+      if (!isAttendanceLoading) {
+        applyFilters();
+      }
 
       if (data.startTime) {
         const startParts = splitIsoToWorkshopDateAndTime(data.startTime);
@@ -931,7 +965,9 @@ document.addEventListener('DOMContentLoaded', () => {
         schedulesCache = Array.isArray(data.schedules) ? data.schedules : schedulesCache;
         attendees = normalizeAttendanceRecords(attendees);
         calculateMetrics();
-        applyFilters();
+        if (!isAttendanceLoading) {
+          applyFilters();
+        }
         renderSchedulesList(schedulesCache, data.status.id, data.status.isLive);
       } catch (err) {
         console.error('Error saving schedule:', err);

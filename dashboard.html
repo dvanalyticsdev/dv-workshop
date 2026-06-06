@@ -284,14 +284,22 @@
 
     .table-container {
       border-radius: var(--radius-lg);
-      overflow: hidden;
       border: 1px solid var(--line);
       background: var(--glass);
       backdrop-filter: blur(24px);
+      overflow: hidden;
+    }
+
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
     }
 
     .attendance-table {
       width: 100%;
+      min-width: 1500px;
       border-collapse: collapse;
       text-align: left;
     }
@@ -683,26 +691,28 @@
 
     <!-- Attendees Table -->
     <div class="table-container glass-shell">
-      <table class="attendance-table" id="attendanceTable">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email Address</th>
-            <th>Phone Number</th>
-            <th>Workshop</th>
-            <th>Counselor</th>
-            <th>Joined Time</th>
-            <th>Total Joined Duration</th>
-            <th>Attendance Status</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody">
-          <!-- Populated by dashboard.js -->
-          <tr>
-            <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="attendance-table" id="attendanceTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email Address</th>
+              <th>Phone Number</th>
+              <th>Workshop</th>
+              <th>Counselor</th>
+              <th>Joined Time</th>
+              <th>Total Joined Duration</th>
+              <th>Attendance Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Populated by dashboard.js -->
+            <tr>
+              <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div class="pagination-bar">
         <span id="paginationSummary" class="pagination-summary">Loading records...</span>
         <div class="pagination-actions">
