@@ -6,6 +6,9 @@ function getMeetingConfig() {
   const params = new URLSearchParams(window.location.search);
   return {
     name: params.get('name') || 'Guest',
+    email: params.get('email') || '',
+    phone: params.get('phone') || '',
+    workshop: params.get('workshop') || '',
     meetingNumber: (params.get('mn') || '').replace(/\D/g, ''),
     meetingPassword: params.get('pwd') || '',
     role: Number(params.get('role') || 0)
@@ -78,10 +81,11 @@ async function startMeeting() {
             sdkKey: signatureData.sdkKey,
             passWord: meetingConfig.meetingPassword,
             userEmail: '',
-            success: () => {
+             success: () => {
               if (meetingShell) {
                 meetingShell.classList.add('hidden');
               }
+              startHeartbeat(meetingConfig);
             },
             error: (error) => {
               console.error(error);
@@ -98,6 +102,36 @@ async function startMeeting() {
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Unable to prepare the meeting.');
+  }
+}
+
+function startHeartbeat(config) {
+  if (!config.email || !config.phone) return;
+  
+  // Track immediately on join
+  sendPing(config);
+  
+  // Ping every 60 seconds
+  setInterval(() => {
+    sendPing(config);
+  }, 60000);
+}
+
+async function sendPing(config) {
+  try {
+    await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: config.name,
+        email: config.email,
+        phone: config.phone,
+        workshopName: config.workshop || 'Excel + AI',
+        joinedDuration: 1
+      })
+    });
+  } catch (err) {
+    console.error('Duration tracking ping failed:', err);
   }
 }
 

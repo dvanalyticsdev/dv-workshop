@@ -172,6 +172,9 @@ registrationForm.addEventListener('submit', async (event) => {
 
       const meetingUrl = new URL('/meeting.html', window.location.origin);
       meetingUrl.searchParams.set('name', fullName);
+      meetingUrl.searchParams.set('email', email);
+      meetingUrl.searchParams.set('phone', phone);
+      meetingUrl.searchParams.set('workshop', WORKSHOP_NAME);
       meetingUrl.searchParams.set('mn', result.meetingNumber || '');
       meetingUrl.searchParams.set('pwd', result.meetingPassword || '');
       meetingUrl.searchParams.set('role', '0');
