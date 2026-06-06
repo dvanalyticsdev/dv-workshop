@@ -9,6 +9,110 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentPage = 1;
   let isAttendanceLoading = true;
 
+  // ── Toast Notification System ──────────────────────────────────────────────
+  (function setupToastSystem() {
+    if (document.getElementById('dv-toast-container')) return;
+    const style = document.createElement('style');
+    style.textContent = `
+      #dv-toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+      }
+      .dv-toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        min-width: 280px;
+        max-width: 380px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+        font-family: 'Outfit', 'Inter', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 500;
+        line-height: 1.4;
+        pointer-events: all;
+        cursor: pointer;
+        animation: dv-toast-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.18);
+      }
+      .dv-toast.success {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.95));
+        color: #fff;
+      }
+      .dv-toast.error {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95));
+        color: #fff;
+      }
+      .dv-toast.info {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95));
+        color: #fff;
+      }
+      .dv-toast-icon { font-size: 1.3rem; flex-shrink: 0; line-height: 1; margin-top: 1px; }
+      .dv-toast-body { flex: 1; }
+      .dv-toast-title { font-weight: 700; font-size: 0.95rem; }
+      .dv-toast-msg { font-weight: 400; font-size: 0.85rem; opacity: 0.92; margin-top: 2px; }
+      .dv-toast-dismiss {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.7);
+        cursor: pointer;
+        font-size: 1.1rem;
+        line-height: 1;
+        padding: 0;
+        margin-top: 1px;
+        transition: color 0.15s;
+      }
+      .dv-toast-dismiss:hover { color: #fff; }
+      @keyframes dv-toast-in {
+        from { opacity: 0; transform: translateX(60px) scale(0.92); }
+        to   { opacity: 1; transform: translateX(0) scale(1); }
+      }
+      @keyframes dv-toast-out {
+        from { opacity: 1; transform: translateX(0) scale(1); max-height: 100px; margin-bottom: 0; }
+        to   { opacity: 0; transform: translateX(60px) scale(0.92); max-height: 0; margin-bottom: -10px; }
+      }
+      .dv-toast.hiding { animation: dv-toast-out 0.3s ease forwards; }
+    `;
+    document.head.appendChild(style);
+    const container = document.createElement('div');
+    container.id = 'dv-toast-container';
+    document.body.appendChild(container);
+  })();
+
+  function showToast(type, title, message, duration = 4000) {
+    const container = document.getElementById('dv-toast-container');
+    if (!container) return;
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const toast = document.createElement('div');
+    toast.className = `dv-toast ${type}`;
+    toast.innerHTML = `
+      <span class="dv-toast-icon">${icons[type] || '🔔'}</span>
+      <div class="dv-toast-body">
+        <div class="dv-toast-title">${title}</div>
+        ${message ? `<div class="dv-toast-msg">${message}</div>` : ''}
+      </div>
+      <button class="dv-toast-dismiss" aria-label="Dismiss">&times;</button>
+    `;
+    function dismiss() {
+      toast.classList.add('hiding');
+      setTimeout(() => toast.remove(), 320);
+    }
+    toast.querySelector('.dv-toast-dismiss').addEventListener('click', dismiss);
+    toast.addEventListener('click', dismiss);
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(dismiss, duration);
+    return toast;
+  }
+
   const tableBody = document.getElementById('tableBody');
   const searchInput = document.getElementById('searchInput');
   const workshopFilter = document.getElementById('workshopFilter');
@@ -624,11 +728,11 @@ document.addEventListener('DOMContentLoaded', () => {
         clearListBtn.textContent = 'Clearing...';
         const response = await fetch('/api/attendance/clear', { method: 'POST' });
         if (!response.ok) throw new Error('Failed to clear list');
-        alert('Attendance list cleared successfully.');
+        showToast('success', 'Attendance Cleared', 'The attendance list has been cleared successfully.');
         await fetchAttendance();
       } catch (error) {
         console.error(error);
-        alert('Error: ' + error.message);
+        showToast('error', 'Clear Failed', error.message);
       } finally {
         clearListBtn.disabled = false;
         clearListBtn.innerHTML = `
@@ -875,25 +979,40 @@ document.addEventListener('DOMContentLoaded', () => {
       // Avoid adding multiple listeners if called repeatedly
       btn.onclick = async (e) => {
         const id = btn.getAttribute('data-id');
-        if (confirm('Are you sure you want to delete this schedule?')) {
-          try {
-            const response = await fetch('/api/schedule/delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id })
-            });
+        if (!confirm('Are you sure you want to delete this schedule?')) return;
 
-            if (!response.ok) {
-              const errData = await response.json();
-              throw new Error(errData.error || 'Failed to delete schedule');
-            }
+        // Disable this button immediately to prevent double-clicks
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
 
-            // Success: refresh list
-            await fetchSchedule();
-          } catch (err) {
-            console.error('Error deleting schedule:', err);
-            alert(err.message);
+        try {
+          const response = await fetch('/api/schedule/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `Server error ${response.status}`);
           }
+
+          // Confirm the deletion actually worked on the server
+          const result = await response.json();
+          if (!result.ok) throw new Error(result.error || 'Deletion was not confirmed by server.');
+
+          showToast('success', 'Schedule Deleted', 'The schedule has been removed successfully.');
+
+          // Always re-fetch from server to ensure UI matches actual backend state
+          await fetchSchedule();
+        } catch (err) {
+          console.error('Error deleting schedule:', err);
+          showToast('error', 'Delete Failed', err.message);
+          // Re-enable button so user can retry
+          btn.disabled = false;
+          btn.style.opacity = '';
+          btn.style.cursor = '';
         }
       };
     });
@@ -912,14 +1031,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (scheduleForm) {
     scheduleForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const startDateVal = scheduleStartDate.value;
       const startTimeVal = scheduleStartTime.value;
       const endDateVal = scheduleEndDate.value;
       const endTimeVal = scheduleEndTime.value;
-      
+
       if (!startDateVal || !startTimeVal || !endDateVal || !endTimeVal) {
-        alert('Please select all date and time fields.');
+        showToast('error', 'Missing Fields', 'Please fill in all date and time fields before saving.');
         return;
       }
 
@@ -927,9 +1046,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const endTime = workshopLocalToIso(endDateVal, endTimeVal);
 
       if (new Date(startTime) >= new Date(endTime)) {
-        alert('Start time must be before end time.');
+        showToast('error', 'Invalid Time Range', 'Start time must be before end time.');
         return;
       }
+
+      // Prevent double-submit
+      if (saveScheduleBtn.disabled) return;
 
       try {
         saveScheduleBtn.disabled = true;
@@ -937,41 +1059,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const response = await fetch('/api/schedule', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ startTime, endTime })
         });
 
         if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || 'Failed to save schedule');
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Server error ${response.status}`);
         }
 
         const data = await response.json();
-        alert('Schedule saved successfully.');
-        
-        if (data.schedule.startTime) {
-          const startParts = splitIsoToWorkshopDateAndTime(data.schedule.startTime);
-          scheduleStartDate.value = startParts.date;
-          scheduleStartTime.value = startParts.time;
-        }
-        if (data.schedule.endTime) {
-          const endParts = splitIsoToWorkshopDateAndTime(data.schedule.endTime);
-          scheduleEndDate.value = endParts.date;
-          scheduleEndTime.value = endParts.time;
-        }
-        updateStatusPill(data.status.isLive);
-        schedulesCache = Array.isArray(data.schedules) ? data.schedules : schedulesCache;
-        attendees = normalizeAttendanceRecords(attendees);
-        calculateMetrics();
-        if (!isAttendanceLoading) {
-          applyFilters();
-        }
-        renderSchedulesList(schedulesCache, data.status.id, data.status.isLive);
+        if (!data.ok) throw new Error(data.error || 'Schedule was not confirmed by server.');
+
+        showToast('success', 'Schedule Saved!', 'The new schedule has been added successfully.');
+
+        // Clear the form fields so there's no stale data
+        scheduleStartDate.value = '';
+        scheduleStartTime.value = '';
+        scheduleEndDate.value = '';
+        scheduleEndTime.value = '';
+
+        // Always re-fetch from server to ensure UI matches actual backend state
+        await fetchSchedule();
       } catch (err) {
         console.error('Error saving schedule:', err);
-        alert(err.message);
+        showToast('error', 'Save Failed', err.message);
       } finally {
         saveScheduleBtn.disabled = false;
         saveScheduleBtn.textContent = 'Save Schedule';
