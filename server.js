@@ -295,6 +295,8 @@ async function readSchedule() {
       }
       return global.__DV_SCHEDULE;
     }
+    // No schedule in memory — return empty (don't auto-create)
+    return [];
   }
   try {
     const raw = await fs.readFile(SCHEDULE_FILE, 'utf8');
@@ -303,29 +305,19 @@ async function readSchedule() {
       return parsed;
     } else if (parsed && parsed.startTime) {
       // Migrate old single object format to array format
-      return [{ id: 'default', startTime: parsed.startTime, endTime: parsed.endTime }];
+      const migrated = [{ id: 'default', startTime: parsed.startTime, endTime: parsed.endTime }];
+      // Write migrated format back so future reads get the array format
+      try {
+        await fs.writeFile(SCHEDULE_FILE, JSON.stringify(migrated, null, 2), 'utf8');
+      } catch (_) { /* non-critical */ }
+      return migrated;
     }
     return [];
   } catch {
-    // Calculate defaults from env variables
-    const startObj = getWorkshopStartDate();
-    const endObj = new Date(startObj.getTime() + 2 * 60 * 60 * 1000); // 2 hours default
-    const defaults = [{
-      id: `sch_${Date.now()}`,
-      startTime: startObj.toISOString(),
-      endTime: endObj.toISOString()
-    }];
-    if (!process.env.VERCEL) {
-      try {
-        await fs.mkdir(DATA_DIR, { recursive: true });
-        await fs.writeFile(SCHEDULE_FILE, JSON.stringify(defaults, null, 2), 'utf8');
-      } catch (err) {
-        console.error('Failed to write default schedule:', err);
-      }
-    } else {
-      global.__DV_SCHEDULE = defaults;
-    }
-    return defaults;
+    // File doesn't exist or is unreadable — return empty array.
+    // Do NOT auto-generate a default schedule here; that caused deleted
+    // schedules to reappear after server restarts.
+    return [];
   }
 }
 
