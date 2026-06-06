@@ -526,17 +526,178 @@ document.addEventListener('DOMContentLoaded', () => {
         const startParts = splitIsoToLocalDateAndTime(data.startTime);
         scheduleStartDate.value = startParts.date;
         scheduleStartTime.value = startParts.time;
+      } else {
+        scheduleStartDate.value = '';
+        scheduleStartTime.value = '';
       }
       if (data.endTime) {
         const endParts = splitIsoToLocalDateAndTime(data.endTime);
         scheduleEndDate.value = endParts.date;
         scheduleEndTime.value = endParts.time;
+      } else {
+        scheduleEndDate.value = '';
+        scheduleEndTime.value = '';
       }
 
       updateStatusPill(data.isLive);
+
+      const schedules = data.schedules || [];
+      renderSchedulesList(schedules, data.id, data.isLive);
     } catch (err) {
       console.error('Error fetching schedule:', err);
     }
+  }
+
+  function formatScheduleTime(startIso, endIso) {
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return { dateStr: '-', timeStr: '-', durationStr: '' };
+    }
+
+    const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const startTimeStr = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+    const endTimeStr = end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const diffMins = Math.round((end.getTime() - start.getTime()) / 60000);
+    let durationStr = '';
+    if (diffMins < 60) {
+      durationStr = `${diffMins}m`;
+    } else {
+      const hrs = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      durationStr = mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+    }
+
+    return { dateStr, timeStr: `${startTimeStr} - ${endTimeStr}`, durationStr };
+  }
+
+  function getScheduleStatusBadge(startIso, endIso, id, activeId, isLive) {
+    const now = Date.now();
+    const start = new Date(startIso).getTime();
+    const end = new Date(endIso).getTime();
+
+    if (now >= start && now <= end) {
+      return `<span class="status-badge badge-on">Live</span>`;
+    } else if (now < start) {
+      return `<span class="status-badge badge-certified" style="background: rgba(75, 123, 255, 0.12); color: var(--accent-2);">Upcoming</span>`;
+    } else {
+      return `<span class="status-badge badge-short" style="background: rgba(18, 32, 51, 0.08); color: var(--muted);">Ended</span>`;
+    }
+  }
+
+  function renderSchedulesList(schedules, activeId, isLive) {
+    const todaysList = document.getElementById('todaysScheduleList');
+    const upcomingList = document.getElementById('upcomingScheduleList');
+
+    if (!todaysList || !upcomingList) return;
+
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD local calendar date
+
+    const todaysSchedules = [];
+    const upcomingSchedules = [];
+
+    schedules.forEach(s => {
+      const start = new Date(s.startTime);
+      const end = new Date(s.endTime);
+      const startDayStr = start.toLocaleDateString('en-CA');
+      const endDayStr = end.toLocaleDateString('en-CA');
+
+      if (startDayStr === todayStr || endDayStr === todayStr) {
+        todaysSchedules.push(s);
+      } else if (start.getTime() > now.getTime()) {
+        upcomingSchedules.push(s);
+      }
+    });
+
+    // Sort chronologically
+    todaysSchedules.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    upcomingSchedules.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+    // Render Today
+    if (todaysSchedules.length === 0) {
+      todaysList.innerHTML = `
+        <div style="color: var(--muted); font-size: 0.88rem; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-md); text-align: center; background: rgba(255, 255, 255, 0.25);">
+          No schedules set for today.
+        </div>
+      `;
+    } else {
+      todaysList.innerHTML = todaysSchedules.map(s => {
+        const { dateStr, timeStr, durationStr } = formatScheduleTime(s.startTime, s.endTime);
+        const badge = getScheduleStatusBadge(s.startTime, s.endTime, s.id, activeId, isLive);
+        return `
+          <div class="schedule-item-card" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: rgba(255, 255, 255, 0.45); border: 1px solid var(--line); border-radius: var(--radius-md); transition: transform 180ms ease, box-shadow 180ms ease;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-weight: 700; font-size: 0.9rem; color: var(--text);">${escapeHtml(dateStr)}</span>
+              <span style="font-size: 0.8rem; color: var(--muted);">${escapeHtml(timeStr)} (${durationStr})</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              ${badge}
+              <button class="delete-schedule-btn" data-id="${s.id}" aria-label="Delete schedule" style="background: none; border: none; padding: 6px; cursor: pointer; color: #ef4444; display: flex; align-items: center; transition: color 150ms ease;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Render Upcoming
+    if (upcomingSchedules.length === 0) {
+      upcomingList.innerHTML = `
+        <div style="color: var(--muted); font-size: 0.88rem; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-md); text-align: center; background: rgba(255, 255, 255, 0.25);">
+          No upcoming schedules.
+        </div>
+      `;
+    } else {
+      upcomingList.innerHTML = upcomingSchedules.map(s => {
+        const { dateStr, timeStr, durationStr } = formatScheduleTime(s.startTime, s.endTime);
+        const badge = getScheduleStatusBadge(s.startTime, s.endTime, s.id, activeId, isLive);
+        return `
+          <div class="schedule-item-card" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: rgba(255, 255, 255, 0.45); border: 1px solid var(--line); border-radius: var(--radius-md); transition: transform 180ms ease, box-shadow 180ms ease;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-weight: 700; font-size: 0.9rem; color: var(--text);">${escapeHtml(dateStr)}</span>
+              <span style="font-size: 0.8rem; color: var(--muted);">${escapeHtml(timeStr)} (${durationStr})</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              ${badge}
+              <button class="delete-schedule-btn" data-id="${s.id}" aria-label="Delete schedule" style="background: none; border: none; padding: 6px; cursor: pointer; color: #ef4444; display: flex; align-items: center; transition: color 150ms ease;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Attach click events for delete buttons
+    document.querySelectorAll('.delete-schedule-btn').forEach(btn => {
+      // Avoid adding multiple listeners if called repeatedly
+      btn.onclick = async (e) => {
+        const id = btn.getAttribute('data-id');
+        if (confirm('Are you sure you want to delete this schedule?')) {
+          try {
+            const response = await fetch('/api/schedule/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id })
+            });
+
+            if (!response.ok) {
+              const errData = await response.json();
+              throw new Error(errData.error || 'Failed to delete schedule');
+            }
+
+            // Success: refresh list
+            await fetchSchedule();
+          } catch (err) {
+            console.error('Error deleting schedule:', err);
+            alert(err.message);
+          }
+        }
+      };
+    });
   }
 
   function updateStatusPill(isLive) {

@@ -283,19 +283,38 @@ function formatTimeInTimezone(date, tz) {
 
 async function readSchedule() {
   if (process.env.VERCEL) {
-    if (global.__DV_SCHEDULE) return global.__DV_SCHEDULE;
+    if (global.__DV_SCHEDULE) {
+      if (!Array.isArray(global.__DV_SCHEDULE)) {
+        global.__DV_SCHEDULE = [
+          {
+            id: 'default',
+            startTime: global.__DV_SCHEDULE.startTime,
+            endTime: global.__DV_SCHEDULE.endTime
+          }
+        ];
+      }
+      return global.__DV_SCHEDULE;
+    }
   }
   try {
     const raw = await fs.readFile(SCHEDULE_FILE, 'utf8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    } else if (parsed && parsed.startTime) {
+      // Migrate old single object format to array format
+      return [{ id: 'default', startTime: parsed.startTime, endTime: parsed.endTime }];
+    }
+    return [];
   } catch {
     // Calculate defaults from env variables
     const startObj = getWorkshopStartDate();
     const endObj = new Date(startObj.getTime() + 2 * 60 * 60 * 1000); // 2 hours default
-    const defaults = {
+    const defaults = [{
+      id: `sch_${Date.now()}`,
       startTime: startObj.toISOString(),
       endTime: endObj.toISOString()
-    };
+    }];
     if (!process.env.VERCEL) {
       try {
         await fs.mkdir(DATA_DIR, { recursive: true });
@@ -320,61 +339,109 @@ async function writeSchedule(schedule) {
 }
 
 async function getWorkshopStatus() {
-  const schedule = await readSchedule();
+  const schedules = await readSchedule();
   const now = new Date();
+  const nowMs = now.getTime();
   
-  if (!schedule.startTime || !schedule.endTime) {
+  const defaultStatus = {
+    startTime: '',
+    endTime: '',
+    startsAt: '',
+    startTimeLabel: '',
+    endTimeLabel: '',
+    isLive: false,
+    status: 'off',
+    msRemaining: 0,
+    timeRemaining: null,
+    message: 'Workshop registration is closed (schedule not set).',
+    schedules: schedules
+  };
+
+  if (!Array.isArray(schedules) || schedules.length === 0) {
+    return defaultStatus;
+  }
+
+  // Check if any schedule is live right now
+  const liveSchedule = schedules.find(s => {
+    const startMs = new Date(s.startTime).getTime();
+    const endMs = new Date(s.endTime).getTime();
+    return nowMs >= startMs && nowMs <= endMs;
+  });
+
+  if (liveSchedule) {
+    const start = new Date(liveSchedule.startTime);
+    const end = new Date(liveSchedule.endTime);
     return {
-      startsAt: '',
-      startTimeLabel: '',
-      endTimeLabel: '',
-      isLive: false,
-      status: 'off',
+      id: liveSchedule.id,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      startsAt: start.toISOString(),
+      startTimeLabel: 'Live now',
+      endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
+      isLive: true,
+      status: 'live',
       msRemaining: 0,
       timeRemaining: null,
-      message: 'Workshop registration is closed (schedule not set).'
+      message: 'The workshop is live now. Join the Zoom session.',
+      schedules: schedules
     };
   }
 
-  const start = new Date(schedule.startTime);
-  const end = new Date(schedule.endTime);
-  const nowMs = now.getTime();
-  const startMs = start.getTime();
-  const endMs = end.getTime();
+  // Check if there are upcoming schedules
+  const upcomingSchedules = schedules
+    .filter(s => new Date(s.startTime).getTime() > nowMs)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-  let isLive = false;
-  let status = 'off';
-  let message = '';
-  let timeRemaining = null;
-  let msRemaining = 0;
-
-  if (nowMs < startMs) {
-    isLive = false;
-    status = 'waiting';
-    msRemaining = startMs - nowMs;
-    timeRemaining = humanDuration(msRemaining);
+  if (upcomingSchedules.length > 0) {
+    const nextSchedule = upcomingSchedules[0];
+    const start = new Date(nextSchedule.startTime);
+    const end = new Date(nextSchedule.endTime);
+    const startMs = start.getTime();
+    const msRemaining = startMs - nowMs;
+    const timeRemaining = humanDuration(msRemaining);
     const label = formatTimeInTimezone(start, WORKSHOP_TIMEZONE);
-    message = `Workshop starts at ${label}. Please wait.`;
-  } else if (nowMs >= startMs && nowMs <= endMs) {
-    isLive = true;
-    status = 'live';
-    message = 'The workshop is live now. Join the Zoom session.';
-  } else {
-    isLive = false;
-    status = 'ended';
-    message = 'The workshop registration has ended.';
+    return {
+      id: nextSchedule.id,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      startsAt: start.toISOString(),
+      startTimeLabel: label,
+      endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
+      isLive: false,
+      status: 'waiting',
+      msRemaining,
+      timeRemaining,
+      message: `Workshop starts at ${label}. Please wait.`,
+      schedules: schedules
+    };
   }
 
-  return {
-    startsAt: start.toISOString(),
-    startTimeLabel: isLive ? 'Live now' : formatTimeInTimezone(start, WORKSHOP_TIMEZONE),
-    endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
-    isLive,
-    status,
-    msRemaining: isLive ? 0 : msRemaining,
-    timeRemaining: isLive ? null : timeRemaining,
-    message
-  };
+  // Check if there are past schedules
+  const endedSchedules = schedules
+    .filter(s => new Date(s.endTime).getTime() < nowMs)
+    .sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime()); // newest ended first
+
+  if (endedSchedules.length > 0) {
+    const lastEnded = endedSchedules[0];
+    const start = new Date(lastEnded.startTime);
+    const end = new Date(lastEnded.endTime);
+    return {
+      id: lastEnded.id,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      startsAt: start.toISOString(),
+      startTimeLabel: formatTimeInTimezone(start, WORKSHOP_TIMEZONE),
+      endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
+      isLive: false,
+      status: 'ended',
+      msRemaining: 0,
+      timeRemaining: null,
+      message: 'The workshop registration has ended.',
+      schedules: schedules
+    };
+  }
+
+  return defaultStatus;
 }
 
 
@@ -789,18 +856,51 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const schedule = {
+      const schedules = await readSchedule();
+      const newSchedule = {
+        id: `sch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         startTime: start.toISOString(),
         endTime: end.toISOString()
       };
 
-      await writeSchedule(schedule);
+      schedules.push(newSchedule);
+      await writeSchedule(schedules);
 
       const status = await getWorkshopStatus();
-      sendJson(res, 200, { ok: true, schedule, status });
+      sendJson(res, 200, { ok: true, schedule: newSchedule, schedules, status });
       return;
     } catch (error) {
       sendJson(res, 500, { error: error.message || 'Unable to update schedule.' });
+      return;
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/schedule/delete') {
+    try {
+      const body = await readBody(req);
+      const { id } = body;
+
+      if (!id) {
+        sendJson(res, 400, { error: 'Schedule ID is required.' });
+        return;
+      }
+
+      const schedules = await readSchedule();
+      const index = schedules.findIndex(s => s.id === id);
+
+      if (index === -1) {
+        sendJson(res, 404, { error: 'Schedule not found.' });
+        return;
+      }
+
+      schedules.splice(index, 1);
+      await writeSchedule(schedules);
+
+      const status = await getWorkshopStatus();
+      sendJson(res, 200, { ok: true, schedules, status });
+      return;
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || 'Unable to delete schedule.' });
       return;
     }
   }
