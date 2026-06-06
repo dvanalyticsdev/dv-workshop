@@ -50,7 +50,7 @@ function closeModal() {
 }
 
 function openWaitingPopup(message) {
-  waitingPopupCopy.textContent = message;
+  waitingPopupCopy.innerHTML = message.replace(/\n/g, '<br>');
   waitingPopup.classList.remove('hidden');
   waitingPopup.setAttribute('aria-hidden', 'false');
 }
@@ -59,6 +59,10 @@ function closeWaitingPopup() {
   waitingPopup.classList.add('hidden');
   waitingPopup.setAttribute('aria-hidden', 'true');
 }
+
+// Close listeners for waiting popup
+document.getElementById('closeWaitingPopupBtn')?.addEventListener('click', closeWaitingPopup);
+document.getElementById('waitingPopupBackdrop')?.addEventListener('click', closeWaitingPopup);
 
 function stopWaitingPoll() {
   if (waitPollTimer) {
@@ -153,6 +157,12 @@ registrationForm.addEventListener('submit', async (event) => {
     }
 
     if (!response.ok) {
+      if (result && result.status && !result.status.isLive) {
+        closeModal();
+        const start12 = formatTime12Hour(result.status.startTimeLabel);
+        openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
+        return;
+      }
       throw new Error(result?.error || `Registration failed (${response.status})`);
     }
 
@@ -180,6 +190,16 @@ registrationForm.addEventListener('submit', async (event) => {
     submitBtn.textContent = 'Submit & Continue';
   }
 });
+
+function formatTime12Hour(timeStr) {
+  if (!timeStr || !timeStr.includes(':')) return timeStr;
+  const [hourStr, minStr] = timeStr.split(':');
+  const hour = parseInt(hourStr, 10);
+  if (isNaN(hour)) return timeStr;
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minStr} ${ampm}`;
+}
 
 loadStatus().catch(() => {
   // Status is only used for live-vs-waiting checks; failing closed keeps the form usable.

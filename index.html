@@ -80,8 +80,13 @@
   </section>
 
   <section class="waiting-popup hidden" id="waitingPopup" aria-hidden="true" aria-live="polite">
-    <div class="waiting-popup-card glass-shell" role="status">
-      <p class="waiting-popup-copy" id="waitingPopupCopy">Kindly wait for the meeting to start.</p>
+    <div class="modal-backdrop" id="waitingPopupBackdrop"></div>
+    <div class="waiting-popup-card glass-shell" role="status" style="position: relative; z-index: 10;">
+      <button type="button" class="close-btn" id="closeWaitingPopupBtn" style="top: 12px; right: 12px; font-size: 1.2rem; width: 32px; height: 32px;">&times;</button>
+      <div style="margin-top: 10px;">
+        <h3 style="margin: 0 0 10px; font-size: 1.3rem; color: var(--brand);">Workshop Timing</h3>
+        <p class="waiting-popup-copy" id="waitingPopupCopy"></p>
+      </div>
     </div>
   </section>
 

@@ -411,7 +411,6 @@ input {
   place-items: center;
   padding: 16px;
   z-index: 2;
-  pointer-events: none;
 }
 
 .waiting-popup-card {

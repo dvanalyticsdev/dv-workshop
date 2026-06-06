@@ -6,7 +6,9 @@
   "engines": {
     "node": "20.x"
   },
-  "dependencies": {},
+  "dependencies": {
+    "mongodb": "^7.2.0"
+  },
   "scripts": {
     "dev": "node server.js"
   }

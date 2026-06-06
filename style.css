@@ -673,3 +673,27 @@ input {
     align-items: flex-start;
   }
 }
+
+.waiting-popup {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 999;
+}
+.waiting-popup-card {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  z-index: 10;
+}
+.waiting-popup-copy {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 500;
+  line-height: 1.6;
+}
