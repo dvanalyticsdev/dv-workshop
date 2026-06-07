@@ -60,6 +60,7 @@ input {
   filter: blur(10px);
   opacity: 0.56;
   animation: floatOrb 16s ease-in-out infinite;
+  will-change: transform;
 }
 
 .orb-1 {

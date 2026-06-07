@@ -706,8 +706,17 @@ document.addEventListener('DOMContentLoaded', () => {
               .replace(/'/g, '&apos;');
   }
 
+  // Debounce helper
+  function debounce(fn, delay) {
+    let timer = null;
+    return function (...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
   // Event Listeners
-  searchInput.addEventListener('input', applyFilters);
+  searchInput.addEventListener('input', debounce(applyFilters, 200));
   workshopFilter.addEventListener('change', applyFilters);
   counselorFilter.addEventListener('change', applyFilters);
   dateFilter.addEventListener('input', applyFilters);
@@ -718,6 +727,51 @@ document.addEventListener('DOMContentLoaded', () => {
     durationSort.addEventListener('change', () => {
       currentPage = 1;
       renderTable();
+    });
+  }
+
+  const scheduleListsContainer = document.getElementById('scheduleListsContainer');
+  if (scheduleListsContainer) {
+    scheduleListsContainer.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.delete-schedule-btn');
+      if (!btn) return;
+
+      const id = btn.getAttribute('data-id');
+      if (!confirm('Are you sure you want to delete this schedule?')) return;
+
+      // Disable this button immediately to prevent double-clicks
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
+
+      try {
+        const response = await fetch('/api/schedule/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Server error ${response.status}`);
+        }
+
+        // Confirm the deletion actually worked on the server
+        const result = await response.json();
+        if (!result.ok) throw new Error(result.error || 'Deletion was not confirmed by server.');
+
+        showToast('success', 'Schedule Deleted', 'The schedule has been removed successfully.');
+
+        // Always re-fetch from server to ensure UI matches actual backend state
+        await fetchSchedule();
+      } catch (err) {
+        console.error('Error deleting schedule:', err);
+        showToast('error', 'Delete Failed', err.message);
+        // Re-enable button so user can retry
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+      }
     });
   }
   prevPageBtn.addEventListener('click', () => {
@@ -991,48 +1045,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }).join('');
     }
 
-    // Attach click events for delete buttons
-    document.querySelectorAll('.delete-schedule-btn').forEach(btn => {
-      // Avoid adding multiple listeners if called repeatedly
-      btn.onclick = async (e) => {
-        const id = btn.getAttribute('data-id');
-        if (!confirm('Are you sure you want to delete this schedule?')) return;
 
-        // Disable this button immediately to prevent double-clicks
-        btn.disabled = true;
-        btn.style.opacity = '0.4';
-        btn.style.cursor = 'not-allowed';
-
-        try {
-          const response = await fetch('/api/schedule/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id })
-          });
-
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || `Server error ${response.status}`);
-          }
-
-          // Confirm the deletion actually worked on the server
-          const result = await response.json();
-          if (!result.ok) throw new Error(result.error || 'Deletion was not confirmed by server.');
-
-          showToast('success', 'Schedule Deleted', 'The schedule has been removed successfully.');
-
-          // Always re-fetch from server to ensure UI matches actual backend state
-          await fetchSchedule();
-        } catch (err) {
-          console.error('Error deleting schedule:', err);
-          showToast('error', 'Delete Failed', err.message);
-          // Re-enable button so user can retry
-          btn.disabled = false;
-          btn.style.opacity = '';
-          btn.style.cursor = '';
-        }
-      };
-    });
   }
 
   function updateStatusPill(isLive) {

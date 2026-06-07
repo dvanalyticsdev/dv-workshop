@@ -58,46 +58,52 @@ async function startMeeting() {
 
   try {
     setStatus('Preparing your Zoom session...');
-    const signatureData = await getSignature(meetingConfig.meetingNumber, meetingConfig.role);
+    const signaturePromise = getSignature(meetingConfig.meetingNumber, meetingConfig.role);
 
     ZoomMtg.setZoomJSLib('https://source.zoom.us/6.0.2/lib', '/av');
     ZoomMtg.preLoadWasm();
     ZoomMtg.prepareWebSDK();
     ZoomMtg.i18n.load('en-US');
 
-    ZoomMtg.i18n.onLoad(() => {
-      ZoomMtg.init({
-        leaveUrl: `${window.location.origin}/`,
-        disableCORP: !window.crossOriginIsolated,
-        success: () => {
-          setStatus('Joining Zoom...');
-          if (meetingShell) {
-            meetingShell.classList.add('hidden');
-          }
-          ZoomMtg.join({
-            meetingNumber: meetingConfig.meetingNumber,
-            userName: meetingConfig.name,
-            signature: signatureData.signature,
-            sdkKey: signatureData.sdkKey,
-            passWord: meetingConfig.meetingPassword,
-            userEmail: '',
-             success: () => {
-              if (meetingShell) {
-                meetingShell.classList.add('hidden');
-              }
-              startHeartbeat(meetingConfig);
-            },
-            error: (error) => {
-              console.error(error);
-              setStatus('Unable to join the meeting right now.');
+    ZoomMtg.i18n.onLoad(async () => {
+      try {
+        const signatureData = await signaturePromise;
+        ZoomMtg.init({
+          leaveUrl: `${window.location.origin}/`,
+          disableCORP: !window.crossOriginIsolated,
+          success: () => {
+            setStatus('Joining Zoom...');
+            if (meetingShell) {
+              meetingShell.classList.add('hidden');
             }
-          });
-        },
-        error: (error) => {
-          console.error(error);
-          setStatus('Unable to initialize Zoom.');
-        }
-      });
+            ZoomMtg.join({
+              meetingNumber: meetingConfig.meetingNumber,
+              userName: meetingConfig.name,
+              signature: signatureData.signature,
+              sdkKey: signatureData.sdkKey,
+              passWord: meetingConfig.meetingPassword,
+              userEmail: '',
+               success: () => {
+                if (meetingShell) {
+                  meetingShell.classList.add('hidden');
+                }
+                startHeartbeat(meetingConfig);
+              },
+              error: (error) => {
+                console.error(error);
+                setStatus('Unable to join the meeting right now.');
+              }
+            });
+          },
+          error: (error) => {
+            console.error(error);
+            setStatus('Unable to initialize Zoom.');
+          }
+        });
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || 'Unable to prepare the meeting.');
+      }
     });
   } catch (error) {
     console.error(error);

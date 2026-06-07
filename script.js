@@ -71,11 +71,6 @@ function stopWaitingPoll() {
   }
 }
 
-async function loadStatus() {
-  const response = await fetch('/api/status');
-  return response.json();
-}
-
 // Email validation
 function isValidEmail(email) {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -209,7 +204,4 @@ function formatTime12Hour(timeStr) {
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${minStr} ${ampm}`;
 }
-
-loadStatus().catch(() => {
-  // Status is only used for live-vs-waiting checks; failing closed keeps the form usable.
-});
+

@@ -65,7 +65,6 @@ const STATIC_FILES = new Map([
   ['/index.html', 'index.html'],
   ['/meeting.html', 'meeting.html'],
   ['/meeting.js', 'meeting.js'],
-  ['/style.css', 'style.css'],
   ['/style-light.css', 'style-light.css'],
   ['/script.js', 'script.js'],
   ['/dashboard.html', 'dashboard.html'],
@@ -126,8 +125,8 @@ async function connectMongo() {
         username: MONGO_USER,
         password: MONGO_PASS   // Raw plain-text password — no encoding needed here
       },
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000
+      serverSelectionTimeoutMS: 3000,
+      connectTimeoutMS: 3000
     });
     await mongoClient.connect();
     // Confirm the connection is live
