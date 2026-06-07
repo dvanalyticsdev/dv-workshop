@@ -161,6 +161,8 @@ registrationForm.addEventListener('submit', async (event) => {
         closeModal();
         if (result.status.status === 'ended') {
           openWaitingPopup(`This workshop registration has ended.`);
+        } else if (result.status.status === 'off' || !result.status.startTimeLabel) {
+          openWaitingPopup(`Next workshop coming soon.`);
         } else {
           const start12 = formatTime12Hour(result.status.startTimeLabel);
           openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);

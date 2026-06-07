@@ -121,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const timeFilter = document.getElementById('timeFilter');
   const timeFilterCondition = document.getElementById('timeFilterCondition');
   const durationFilter = document.getElementById('durationFilter');
+  const durationSort = document.getElementById('durationSort');
   const filterStatus = document.getElementById('filterStatus');
   const paginationSummary = document.getElementById('paginationSummary');
   const pageIndicator = document.getElementById('pageIndicator');
@@ -469,17 +470,25 @@ document.addEventListener('DOMContentLoaded', () => {
     prevPageBtn.hidden = false;
     nextPageBtn.hidden = false;
 
-    // Sort by Counselor, then by name
-    const sorted = [...filteredAttendees].sort((a, b) => {
-      const cA = a.counselor || 'Unassigned';
-      const cB = b.counselor || 'Unassigned';
-      if (cA === cB) {
-        return a.fullName.localeCompare(b.fullName);
-      }
-      if (cA === 'Unassigned') return 1;
-      if (cB === 'Unassigned') return -1;
-      return cA.localeCompare(cB);
-    });
+    // Sort by Counselor, then by name, or by duration if selected
+    const durationSortVal = durationSort ? durationSort.value : 'default';
+    const sorted = [...filteredAttendees];
+    if (durationSortVal === 'highToLow') {
+      sorted.sort((a, b) => (b.effectiveJoinedDuration || 0) - (a.effectiveJoinedDuration || 0));
+    } else if (durationSortVal === 'lowToHigh') {
+      sorted.sort((a, b) => (a.effectiveJoinedDuration || 0) - (b.effectiveJoinedDuration || 0));
+    } else {
+      sorted.sort((a, b) => {
+        const cA = a.counselor || 'Unassigned';
+        const cB = b.counselor || 'Unassigned';
+        if (cA === cB) {
+          return a.fullName.localeCompare(b.fullName);
+        }
+        if (cA === 'Unassigned') return 1;
+        if (cB === 'Unassigned') return -1;
+        return cA.localeCompare(cB);
+      });
+    }
 
     const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
     if (currentPage > totalPages) {
@@ -502,16 +511,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     pageRows.forEach(a => {
       const c = a.counselor || 'Unassigned';
-      if (c !== currentCounselor) {
-        currentCounselor = c;
-        const count = counselorCounts[c];
-        html.push(`
-          <tr class="counselor-group-row">
-            <td colspan="8" class="counselor-group-cell">
-              Counselor: ${escapeHtml(currentCounselor)} (${count} matched)
-            </td>
-          </tr>
-        `);
+      if (durationSortVal === 'default') {
+        if (c !== currentCounselor) {
+          currentCounselor = c;
+          const count = counselorCounts[c];
+          html.push(`
+            <tr class="counselor-group-row">
+              <td colspan="8" class="counselor-group-cell">
+                Counselor: ${escapeHtml(currentCounselor)} (${count} matched)
+              </td>
+            </tr>
+          `);
+        }
       }
 
       html.push(`
@@ -703,6 +714,12 @@ document.addEventListener('DOMContentLoaded', () => {
   timeFilter.addEventListener('input', applyFilters);
   timeFilterCondition.addEventListener('change', applyFilters);
   durationFilter.addEventListener('change', applyFilters);
+  if (durationSort) {
+    durationSort.addEventListener('change', () => {
+      currentPage = 1;
+      renderTable();
+    });
+  }
   prevPageBtn.addEventListener('click', () => {
     if (currentPage > 1) {
       currentPage--;

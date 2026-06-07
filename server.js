@@ -231,15 +231,13 @@ async function enrichRegistrationsWithCounselors(registrations) {
     await connectMongo();
     if (mongoClient) {
       const crmDb = mongoClient.db('i-crm-workshop');
-      const stateDoc = await crmDb.collection('app_state').findOne({});
+      const leads = await crmDb.collection('leads').find({}, { projection: { phone: 1, counselor: 1 } }).toArray();
       const leadMap = new Map();
-      if (stateDoc && Array.isArray(stateDoc.leads)) {
-        for (const lead of stateDoc.leads) {
-          if (lead.phone && lead.counselor) {
-            const corePhone = getCore10Digits(lead.phone);
-            if (corePhone) {
-              leadMap.set(corePhone, lead.counselor);
-            }
+      for (const lead of leads) {
+        if (lead.phone && lead.counselor) {
+          const corePhone = getCore10Digits(lead.phone);
+          if (corePhone) {
+            leadMap.set(corePhone, lead.counselor);
           }
         }
       }
