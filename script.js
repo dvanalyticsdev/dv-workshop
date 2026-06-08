@@ -71,11 +71,6 @@ function stopWaitingPoll() {
   }
 }
 
-async function loadStatus() {
-  const response = await fetch('/api/status');
-  return response.json();
-}
-
 // Email validation
 function isValidEmail(email) {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -159,8 +154,14 @@ registrationForm.addEventListener('submit', async (event) => {
     if (!response.ok) {
       if (result && result.status && !result.status.isLive) {
         closeModal();
-        const start12 = formatTime12Hour(result.status.startTimeLabel);
-        openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
+        if (result.status.status === 'ended') {
+          openWaitingPopup(`This workshop registration has ended.`);
+        } else if (result.status.status === 'off' || !result.status.startTimeLabel) {
+          openWaitingPopup(`Next workshop coming soon.`);
+        } else {
+          const start12 = formatTime12Hour(result.status.startTimeLabel);
+          openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
+        }
         return;
       }
       throw new Error(result?.error || `Registration failed (${response.status})`);
@@ -204,6 +205,3 @@ function formatTime12Hour(timeStr) {
   return `${displayHour}:${minStr} ${ampm}`;
 }
 
-loadStatus().catch(() => {
-  // Status is only used for live-vs-waiting checks; failing closed keeps the form usable.
-});

@@ -48,6 +48,7 @@ loadEnvFile(ENV_FILE);
 
 const DATA_DIR = path.join(ROOT, 'data');
 const REGISTRATIONS_FILE = path.join(DATA_DIR, 'registrations.json');
+const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
 const PORT = Number(process.env.PORT || 3000);
 const ZOOM_MEETING_ID = String(process.env.ZOOM_MEETING_ID || '').replace(/\D/g, '');
 const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
@@ -64,7 +65,6 @@ const STATIC_FILES = new Map([
   ['/index.html', 'index.html'],
   ['/meeting.html', 'meeting.html'],
   ['/meeting.js', 'meeting.js'],
-  ['/style.css', 'style.css'],
   ['/style-light.css', 'style-light.css'],
   ['/script.js', 'script.js'],
   ['/dashboard.html', 'dashboard.html'],
@@ -125,8 +125,8 @@ async function connectMongo() {
         username: MONGO_USER,
         password: MONGO_PASS   // Raw plain-text password — no encoding needed here
       },
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000
+      serverSelectionTimeoutMS: 3000,
+      connectTimeoutMS: 3000
     });
     await mongoClient.connect();
     // Confirm the connection is live
@@ -230,15 +230,13 @@ async function enrichRegistrationsWithCounselors(registrations) {
     await connectMongo();
     if (mongoClient) {
       const crmDb = mongoClient.db('i-crm-workshop');
-      const stateDoc = await crmDb.collection('app_state').findOne({});
+      const leads = await crmDb.collection('leads').find({}, { projection: { phone: 1, counselor: 1 } }).toArray();
       const leadMap = new Map();
-      if (stateDoc && Array.isArray(stateDoc.leads)) {
-        for (const lead of stateDoc.leads) {
-          if (lead.phone && lead.counselor) {
-            const corePhone = getCore10Digits(lead.phone);
-            if (corePhone) {
-              leadMap.set(corePhone, lead.counselor);
-            }
+      for (const lead of leads) {
+        if (lead.phone && lead.counselor) {
+          const corePhone = getCore10Digits(lead.phone);
+          if (corePhone) {
+            leadMap.set(corePhone, lead.counselor);
           }
         }
       }
@@ -266,22 +264,173 @@ async function enrichRegistrationsWithCounselors(registrations) {
   return registrations;
 }
 
-function getWorkshopStatus() {
-  const now      = new Date();
-  const startsAt = getWorkshopStartDate();
-  const msRemaining = startsAt.getTime() - now.getTime();
-  const isLive   = msRemaining <= 0;
+function formatTimeInTimezone(date, tz) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(date));
+  } catch (err) {
+    console.error('Error formatting time in timezone:', err);
+    return '';
+  }
+}
 
-  return {
-    startsAt: startsAt.toISOString(),
-    startTimeLabel: isLive ? 'Live now' : WORKSHOP_START_TIME,
-    isLive,
-    msRemaining: isLive ? 0 : msRemaining,
-    timeRemaining: isLive ? null : humanDuration(msRemaining),
-    message: isLive
-      ? 'The workshop is live now. Join the Zoom session.'
-      : `Workshop starts at ${WORKSHOP_START_TIME}. Please wait.`
+async function readSchedule() {
+  if (process.env.VERCEL) {
+    if (global.__DV_SCHEDULE) {
+      if (!Array.isArray(global.__DV_SCHEDULE)) {
+        global.__DV_SCHEDULE = [
+          {
+            id: 'default',
+            startTime: global.__DV_SCHEDULE.startTime,
+            endTime: global.__DV_SCHEDULE.endTime
+          }
+        ];
+      }
+      return global.__DV_SCHEDULE;
+    }
+    // No schedule in memory — return empty (don't auto-create)
+    return [];
+  }
+  try {
+    const raw = await fs.readFile(SCHEDULE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    } else if (parsed && parsed.startTime) {
+      // Migrate old single object format to array format
+      const migrated = [{ id: 'default', startTime: parsed.startTime, endTime: parsed.endTime }];
+      // Write migrated format back so future reads get the array format
+      try {
+        await fs.writeFile(SCHEDULE_FILE, JSON.stringify(migrated, null, 2), 'utf8');
+      } catch (_) { /* non-critical */ }
+      return migrated;
+    }
+    return [];
+  } catch {
+    // File doesn't exist or is unreadable — return empty array.
+    // Do NOT auto-generate a default schedule here; that caused deleted
+    // schedules to reappear after server restarts.
+    return [];
+  }
+}
+
+async function writeSchedule(schedule) {
+  if (process.env.VERCEL) {
+    global.__DV_SCHEDULE = schedule;
+    return;
+  }
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(SCHEDULE_FILE, JSON.stringify(schedule, null, 2), 'utf8');
+}
+
+async function getWorkshopStatus() {
+  const schedules = await readSchedule();
+  const now = new Date();
+  const nowMs = now.getTime();
+  
+  const defaultStatus = {
+    startTime: '',
+    endTime: '',
+    startsAt: '',
+    startTimeLabel: '',
+    endTimeLabel: '',
+    isLive: false,
+    status: 'off',
+    msRemaining: 0,
+    timeRemaining: null,
+    message: 'Workshop registration is closed (schedule not set).',
+    schedules: schedules
   };
+
+  if (!Array.isArray(schedules) || schedules.length === 0) {
+    return defaultStatus;
+  }
+
+  // Check if any schedule is live right now
+  const liveSchedule = schedules.find(s => {
+    const startMs = new Date(s.startTime).getTime();
+    const endMs = new Date(s.endTime).getTime();
+    return nowMs >= startMs && nowMs <= endMs;
+  });
+
+  if (liveSchedule) {
+    const start = new Date(liveSchedule.startTime);
+    const end = new Date(liveSchedule.endTime);
+    return {
+      id: liveSchedule.id,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      startsAt: start.toISOString(),
+      startTimeLabel: 'Live now',
+      endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
+      isLive: true,
+      status: 'live',
+      msRemaining: 0,
+      timeRemaining: null,
+      message: 'The workshop is live now. Join the Zoom session.',
+      schedules: schedules
+    };
+  }
+
+  // Check if there are upcoming schedules
+  const upcomingSchedules = schedules
+    .filter(s => new Date(s.startTime).getTime() > nowMs)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  if (upcomingSchedules.length > 0) {
+    const nextSchedule = upcomingSchedules[0];
+    const start = new Date(nextSchedule.startTime);
+    const end = new Date(nextSchedule.endTime);
+    const startMs = start.getTime();
+    const msRemaining = startMs - nowMs;
+    const timeRemaining = humanDuration(msRemaining);
+    const label = formatTimeInTimezone(start, WORKSHOP_TIMEZONE);
+    return {
+      id: nextSchedule.id,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      startsAt: start.toISOString(),
+      startTimeLabel: label,
+      endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
+      isLive: false,
+      status: 'waiting',
+      msRemaining,
+      timeRemaining,
+      message: `Workshop starts at ${label}. Please wait.`,
+      schedules: schedules
+    };
+  }
+
+  // Check if there are past schedules
+  const endedSchedules = schedules
+    .filter(s => new Date(s.endTime).getTime() < nowMs)
+    .sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime()); // newest ended first
+
+  if (endedSchedules.length > 0) {
+    const lastEnded = endedSchedules[0];
+    const start = new Date(lastEnded.startTime);
+    const end = new Date(lastEnded.endTime);
+    return {
+      id: lastEnded.id,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      startsAt: start.toISOString(),
+      startTimeLabel: formatTimeInTimezone(start, WORKSHOP_TIMEZONE),
+      endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
+      isLive: false,
+      status: 'ended',
+      msRemaining: 0,
+      timeRemaining: null,
+      message: 'The workshop registration has ended.',
+      schedules: schedules
+    };
+  }
+
+  return defaultStatus;
 }
 
 
@@ -630,7 +779,8 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = requestUrl;
 
   if (req.method === 'GET' && pathname === '/api/status') {
-    sendJson(res, 200, getWorkshopStatus());
+    const status = await getWorkshopStatus();
+    sendJson(res, 200, status);
     return;
   }
 
@@ -673,6 +823,77 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === 'POST' && pathname === '/api/schedule') {
+    try {
+      const body = await readBody(req);
+      const { startTime, endTime } = body;
+
+      if (!startTime || !endTime) {
+        sendJson(res, 400, { error: 'Start time and end time are required.' });
+        return;
+      }
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        sendJson(res, 400, { error: 'Invalid date or time format.' });
+        return;
+      }
+
+      if (start.getTime() >= end.getTime()) {
+        sendJson(res, 400, { error: 'Start time must be before end time.' });
+        return;
+      }
+
+      const schedules = await readSchedule();
+      const newSchedule = {
+        id: `sch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        startTime: start.toISOString(),
+        endTime: end.toISOString()
+      };
+
+      schedules.push(newSchedule);
+      await writeSchedule(schedules);
+
+      const status = await getWorkshopStatus();
+      sendJson(res, 200, { ok: true, schedule: newSchedule, schedules, status });
+      return;
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || 'Unable to update schedule.' });
+      return;
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/schedule/delete') {
+    try {
+      const body = await readBody(req);
+      const { id } = body;
+
+      if (!id) {
+        sendJson(res, 400, { error: 'Schedule ID is required.' });
+        return;
+      }
+
+      const schedules = await readSchedule();
+      const index = schedules.findIndex(s => s.id === id);
+
+      if (index === -1) {
+        sendJson(res, 404, { error: 'Schedule not found.' });
+        return;
+      }
+
+      schedules.splice(index, 1);
+      await writeSchedule(schedules);
+
+      const status = await getWorkshopStatus();
+      sendJson(res, 200, { ok: true, schedules, status });
+      return;
+    } catch (error) {
+      sendJson(res, 500, { error: error.message || 'Unable to delete schedule.' });
+      return;
+    }
+  }
+
   if (req.method === 'POST' && pathname === '/api/signature') {
     try {
       const body = await readBody(req);
@@ -710,7 +931,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const status = getWorkshopStatus();
+      const status = await getWorkshopStatus();
       if (!status.isLive) {
         sendJson(res, 400, {
           error: `Workshop has not started yet. ${status.timeRemaining} remaining.`,

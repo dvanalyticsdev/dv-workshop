@@ -284,14 +284,22 @@
 
     .table-container {
       border-radius: var(--radius-lg);
-      overflow: hidden;
       border: 1px solid var(--line);
       background: var(--glass);
       backdrop-filter: blur(24px);
+      overflow: hidden;
+    }
+
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
     }
 
     .attendance-table {
       width: 100%;
+      min-width: 1500px;
       border-collapse: collapse;
       text-align: left;
     }
@@ -319,6 +327,38 @@
       background: rgba(255, 255, 255, 0.25);
     }
 
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      border-top: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.22);
+      flex-wrap: wrap;
+    }
+
+    .pagination-summary {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .pagination-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-page {
+      font-size: 0.82rem;
+      color: var(--text);
+      font-weight: 700;
+      min-width: 110px;
+      text-align: center;
+    }
+
     /* Badges */
     .status-badge {
       display: inline-flex;
@@ -344,6 +384,16 @@
     .badge-short {
       background: rgba(18, 32, 51, 0.08);
       color: var(--muted);
+    }
+
+    .badge-on {
+      background: rgba(16, 185, 129, 0.12);
+      color: #10b981;
+    }
+
+    .badge-off {
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
     }
 
     .empty-state h3 {
@@ -506,6 +556,67 @@
       </div>
     </div>
 
+    <!-- Workshop Schedule Control -->
+    <div class="glass-shell" style="padding: 24px; border-radius: var(--radius-lg); margin-bottom: 24px;">
+      <h2 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 16px; font-weight: 700; color: var(--text);">Workshop Schedule Gate</h2>
+      <form id="scheduleForm" style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end;">
+        <div class="control-item" style="flex: 1.2; min-width: 150px;">
+          <label for="scheduleStartDate">Start Date</label>
+          <input type="date" id="scheduleStartDate" class="control-input" required>
+        </div>
+        <div class="control-item" style="flex: 0.8; min-width: 110px;">
+          <label for="scheduleStartTime">Start Time</label>
+          <input type="time" id="scheduleStartTime" class="control-input" required>
+        </div>
+        <div class="control-item" style="flex: 1.2; min-width: 150px;">
+          <label for="scheduleEndDate">End Date</label>
+          <input type="date" id="scheduleEndDate" class="control-input" required>
+        </div>
+        <div class="control-item" style="flex: 0.8; min-width: 110px;">
+          <label for="scheduleEndTime">End Time</label>
+          <input type="time" id="scheduleEndTime" class="control-input" required>
+        </div>
+        <div style="display: flex; gap: 16px; align-items: center; min-width: 280px; flex-wrap: wrap; margin-top: 10px;">
+          <button type="submit" id="saveScheduleBtn" class="primary-btn" style="min-height: 48px; padding: 0 24px; font-size: 0.9rem; border-radius: 999px;">Save Schedule</button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Submit Button Status:</span>
+            <span id="registrationStatusPill" class="status-badge badge-off">Checking...</span>
+          </div>
+        </div>
+      </form>
+
+      <!-- Lists of Schedules -->
+      <div id="scheduleListsContainer" style="margin-top: 28px; border-top: 1px solid var(--line); padding-top: 24px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px;">
+          <!-- Today's Schedule -->
+          <div>
+            <h3 style="font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 0; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-2);"></span>
+              Today's Schedule
+            </h3>
+            <div id="todaysScheduleList" style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="color: var(--muted); font-size: 0.88rem; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-md); text-align: center; background: rgba(255, 255, 255, 0.25);">
+                No schedules set for today.
+              </div>
+            </div>
+          </div>
+          
+          <!-- Upcoming Schedule -->
+          <div>
+            <h3 style="font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 0; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent);"></span>
+              Upcoming Schedule
+            </h3>
+            <div id="upcomingScheduleList" style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="color: var(--muted); font-size: 0.88rem; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-md); text-align: center; background: rgba(255, 255, 255, 0.25);">
+                No upcoming schedules.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Counselor Breakdown -->
     <div class="counselor-breakdown-card">
       <h2 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 16px; font-weight: 700; color: var(--text);">Counselor Breakdown</h2>
@@ -557,6 +668,14 @@
             <option value="short">Quick join / Short stays (&lt; 15 mins)</option>
           </select>
         </div>
+        <div class="control-item">
+          <label for="durationSort">Duration Sort</label>
+          <select id="durationSort" class="control-input">
+            <option value="default">Default (Counselor/Name)</option>
+            <option value="highToLow">High to Low</option>
+            <option value="lowToHigh">Low to High</option>
+          </select>
+        </div>
       </div>
       
       <div class="control-item" style="flex: 1; width: 100%; display: flex; flex-direction: row; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 6px;">
@@ -580,26 +699,36 @@
 
     <!-- Attendees Table -->
     <div class="table-container glass-shell">
-      <table class="attendance-table" id="attendanceTable">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email Address</th>
-            <th>Phone Number</th>
-            <th>Workshop</th>
-            <th>Counselor</th>
-            <th>Joined Time</th>
-            <th>Total Joined Duration</th>
-            <th>Attendance Status</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody">
-          <!-- Populated by dashboard.js -->
-          <tr>
-            <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="attendance-table" id="attendanceTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email Address</th>
+              <th>Phone Number</th>
+              <th>Workshop</th>
+              <th>Counselor</th>
+              <th>Joined Time</th>
+              <th>Total Joined Duration</th>
+              <th>Attendance Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Populated by dashboard.js -->
+            <tr>
+              <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">Loading attendance data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination-bar">
+        <span id="paginationSummary" class="pagination-summary">Loading records...</span>
+        <div class="pagination-actions">
+          <button id="prevPageBtn" class="export-btn" type="button">Previous</button>
+          <span id="pageIndicator" class="pagination-page">Page 1 of 1</span>
+          <button id="nextPageBtn" class="export-btn" type="button">Next</button>
+        </div>
+      </div>
     </div>
   </main>
 
