@@ -897,19 +897,26 @@ document.addEventListener('DOMContentLoaded', () => {
         applyFilters();
       }
 
-      if (data.startTime) {
-        const startParts = splitIsoToWorkshopDateAndTime(data.startTime);
-        scheduleStartDate.value = startParts.date;
-        scheduleStartTime.value = startParts.time;
+      if (data.status === 'live' || data.status === 'waiting') {
+        if (data.startTime) {
+          const startParts = splitIsoToWorkshopDateAndTime(data.startTime);
+          scheduleStartDate.value = startParts.date;
+          scheduleStartTime.value = startParts.time;
+        } else {
+          scheduleStartDate.value = '';
+          scheduleStartTime.value = '';
+        }
+        if (data.endTime) {
+          const endParts = splitIsoToWorkshopDateAndTime(data.endTime);
+          scheduleEndDate.value = endParts.date;
+          scheduleEndTime.value = endParts.time;
+        } else {
+          scheduleEndDate.value = '';
+          scheduleEndTime.value = '';
+        }
       } else {
         scheduleStartDate.value = '';
         scheduleStartTime.value = '';
-      }
-      if (data.endTime) {
-        const endParts = splitIsoToWorkshopDateAndTime(data.endTime);
-        scheduleEndDate.value = endParts.date;
-        scheduleEndTime.value = endParts.time;
-      } else {
         scheduleEndDate.value = '';
         scheduleEndTime.value = '';
       }
@@ -963,6 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderSchedulesList(schedules, activeId, isLive) {
     const todaysList = document.getElementById('todaysScheduleList');
     const upcomingList = document.getElementById('upcomingScheduleList');
+    const pastList = document.getElementById('pastScheduleList');
 
     if (!todaysList || !upcomingList) return;
 
@@ -971,6 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const todaysSchedules = [];
     const upcomingSchedules = [];
+    const pastSchedules = [];
 
     schedules.forEach(s => {
       const start = new Date(s.startTime);
@@ -982,12 +991,15 @@ document.addEventListener('DOMContentLoaded', () => {
         todaysSchedules.push(s);
       } else if (start.getTime() > now.getTime()) {
         upcomingSchedules.push(s);
+      } else {
+        pastSchedules.push(s);
       }
     });
 
-    // Sort chronologically
+    // Sort chronologically/reverse-chronologically
     todaysSchedules.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     upcomingSchedules.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    pastSchedules.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()); // Newest past first
 
     // Render Today
     if (todaysSchedules.length === 0) {
@@ -1045,7 +1057,35 @@ document.addEventListener('DOMContentLoaded', () => {
       }).join('');
     }
 
-
+    // Render Past
+    if (pastList) {
+      if (pastSchedules.length === 0) {
+        pastList.innerHTML = `
+          <div style="color: var(--muted); font-size: 0.88rem; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-md); text-align: center; background: rgba(255, 255, 255, 0.25);">
+            No past schedules.
+          </div>
+        `;
+      } else {
+        pastList.innerHTML = pastSchedules.map(s => {
+          const { dateStr, timeStr, durationStr } = formatScheduleTime(s.startTime, s.endTime);
+          const badge = getScheduleStatusBadge(s.startTime, s.endTime, s.id, activeId, isLive);
+          return `
+            <div class="schedule-item-card" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: rgba(255, 255, 255, 0.45); border: 1px solid var(--line); border-radius: var(--radius-md); transition: transform 180ms ease, box-shadow 180ms ease;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 700; font-size: 0.9rem; color: var(--text);">${escapeHtml(dateStr)}</span>
+                <span style="font-size: 0.8rem; color: var(--muted);">${escapeHtml(timeStr)} (${durationStr})</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                ${badge}
+                <button class="delete-schedule-btn" data-id="${s.id}" aria-label="Delete schedule" style="background: none; border: none; padding: 6px; cursor: pointer; color: #ef4444; display: flex; align-items: center; transition: color 150ms ease;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
   }
 
   function updateStatusPill(isLive) {
