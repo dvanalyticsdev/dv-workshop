@@ -9,7 +9,7 @@ const waitingPopup = document.getElementById('waitingPopup');
 const waitingPopupCopy = document.getElementById('waitingPopupCopy');
 
 // Configuration for workshop name
-const WORKSHOP_NAME = 'Excel + AI';
+const WORKSHOP_NAME = 'GEN AI AND AGENTIC AI';
 
 let modalHideTimer = null;
 let waitPollTimer = null;
@@ -204,4 +204,4 @@ function formatTime12Hour(timeStr) {
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${minStr} ${ampm}`;
 }
-
+
