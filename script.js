@@ -9,7 +9,7 @@ const waitingPopup = document.getElementById('waitingPopup');
 const waitingPopupCopy = document.getElementById('waitingPopupCopy');
 
 // Configuration for workshop name
-const WORKSHOP_NAME = 'Excel + AI';
+const WORKSHOP_NAME = 'SQL + AI';
 
 let modalHideTimer = null;
 let waitPollTimer = null;
