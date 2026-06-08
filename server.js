@@ -83,6 +83,7 @@ const COLLECTION_NAME = 'attendees';
 let mongoClient = null;
 let db = null;
 let attendeesCollection = null;
+let schedulesCollection = null;
 let mongoConnectionFailed = false; // Set to true only if credentials are completely missing
 let lastConnectAttemptTime = 0;
 const CONNECT_COOLDOWN_MS = 10000; // 10s cooldown between retries
@@ -95,6 +96,7 @@ async function connectMongo() {
       db = null;
       mongoClient = null;
       attendeesCollection = null;
+      schedulesCollection = null;
     } else {
       return db;
     }
@@ -133,6 +135,7 @@ async function connectMongo() {
     await mongoClient.db('admin').command({ ping: 1 });
     db = mongoClient.db(DB_NAME);
     attendeesCollection = db.collection(COLLECTION_NAME);
+    schedulesCollection = db.collection('schedules');
 
     // Create a metadata document if the collection is brand new so the DB
     // shows up immediately in MongoDB Atlas / Compass
@@ -153,6 +156,7 @@ async function connectMongo() {
     db = null;
     mongoClient = null;
     attendeesCollection = null;
+    schedulesCollection = null;
   }
   return null;
 }
@@ -256,6 +260,7 @@ async function enrichRegistrationsWithCounselors(registrations) {
       db = null;
       mongoClient = null;
       attendeesCollection = null;
+      schedulesCollection = null;
     }
     for (const reg of registrations) {
       reg.counselor = 'Unassigned';
@@ -279,6 +284,28 @@ function formatTimeInTimezone(date, tz) {
 }
 
 async function readSchedule() {
+  try {
+    await connectMongo();
+    if (schedulesCollection) {
+      const schedules = await schedulesCollection.find({}).toArray();
+      return schedules
+        .filter(s => s.id && s.startTime && s.endTime)
+        .map(s => ({
+          id: s.id,
+          startTime: s.startTime,
+          endTime: s.endTime
+        }));
+    }
+  } catch (error) {
+    console.error('MongoDB readSchedule failed, falling back:', error);
+    if (error.name === 'MongoTopologyClosedError' || error.message.includes('Topology is closed')) {
+      db = null;
+      mongoClient = null;
+      attendeesCollection = null;
+      schedulesCollection = null;
+    }
+  }
+
   if (process.env.VERCEL) {
     if (global.__DV_SCHEDULE) {
       if (!Array.isArray(global.__DV_SCHEDULE)) {
@@ -319,6 +346,29 @@ async function readSchedule() {
 }
 
 async function writeSchedule(schedule) {
+  try {
+    await connectMongo();
+    if (schedulesCollection) {
+      await schedulesCollection.deleteMany({});
+      if (schedule.length > 0) {
+        await schedulesCollection.insertMany(schedule.map(s => ({
+          id: s.id,
+          startTime: s.startTime,
+          endTime: s.endTime
+        })));
+      }
+      return;
+    }
+  } catch (error) {
+    console.error('MongoDB writeSchedule failed, falling back:', error);
+    if (error.name === 'MongoTopologyClosedError' || error.message.includes('Topology is closed')) {
+      db = null;
+      mongoClient = null;
+      attendeesCollection = null;
+      schedulesCollection = null;
+    }
+  }
+
   if (process.env.VERCEL) {
     global.__DV_SCHEDULE = schedule;
     return;
@@ -467,6 +517,7 @@ async function readRegistrations() {
       db = null;
       mongoClient = null;
       attendeesCollection = null;
+      schedulesCollection = null;
     }
   }
 
@@ -536,6 +587,7 @@ async function writeRegistration(entry) {
       db = null;
       mongoClient = null;
       attendeesCollection = null;
+      schedulesCollection = null;
     }
   }
 
@@ -817,6 +869,7 @@ const server = http.createServer(async (req, res) => {
         db = null;
         mongoClient = null;
         attendeesCollection = null;
+        schedulesCollection = null;
       }
       sendJson(res, 500, { error: error.message || 'Unable to clear list.' });
       return;
