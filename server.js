@@ -283,6 +283,21 @@ function formatTimeInTimezone(date, tz) {
   }
 }
 
+function formatDateInTimezone(date, tz) {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(new Date(date));
+  } catch (err) {
+    console.error('Error formatting date in timezone:', err);
+    return '';
+  }
+}
+
 async function readSchedule() {
   try {
     await connectMongo();
@@ -439,18 +454,20 @@ async function getWorkshopStatus() {
     const msRemaining = startMs - nowMs;
     const timeRemaining = humanDuration(msRemaining);
     const label = formatTimeInTimezone(start, WORKSHOP_TIMEZONE);
+    const dateLabel = formatDateInTimezone(start, WORKSHOP_TIMEZONE);
     return {
       id: nextSchedule.id,
       startTime: start.toISOString(),
       endTime: end.toISOString(),
       startsAt: start.toISOString(),
+      startDateLabel: dateLabel,
       startTimeLabel: label,
       endTimeLabel: formatTimeInTimezone(end, WORKSHOP_TIMEZONE),
       isLive: false,
       status: 'waiting',
       msRemaining,
       timeRemaining,
-      message: `Workshop starts at ${label}. Please wait.`,
+      message: `Workshop starts on ${dateLabel} at ${label}. Please wait.`,
       schedules: schedules
     };
   }

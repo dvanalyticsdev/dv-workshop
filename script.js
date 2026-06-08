@@ -160,7 +160,8 @@ registrationForm.addEventListener('submit', async (event) => {
           openWaitingPopup(`Next workshop coming soon.`);
         } else {
           const start12 = formatTime12Hour(result.status.startTimeLabel);
-          openWaitingPopup(`This workshop starts at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
+          const datePart = result.status.startDateLabel ? ` on <strong>${result.status.startDateLabel}</strong>` : '';
+          openWaitingPopup(`This workshop starts${datePart} at <strong>${start12}</strong>.<br><br>Time remaining: <strong>${result.status.timeRemaining || '0 min'}</strong>.`);
         }
         return;
       }
