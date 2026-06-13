@@ -659,8 +659,22 @@
           </select>
         </div>
         <div class="control-item">
+          <label for="recordScopeFilter">Data Scope</label>
+          <select id="recordScopeFilter" class="control-input">
+            <option value="today">Current Date</option>
+            <option value="selected">Selected Date</option>
+            <option value="all">All History</option>
+          </select>
+        </div>
+        <div class="control-item">
           <label for="dateFilter">Join Date</label>
           <input type="date" id="dateFilter" class="control-input">
+        </div>
+        <div class="control-item">
+          <label>&nbsp;</label>
+          <button id="todayShortcutBtn" type="button" class="export-btn" style="justify-content: center; min-height: 46px;">
+            Jump To Today
+          </button>
         </div>
         <div class="control-item">
           <label for="timeFilter">Join Time Filter</label>

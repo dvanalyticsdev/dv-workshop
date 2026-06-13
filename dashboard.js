@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentPage = 1;
   let isAttendanceLoading = true;
   let activeAttendanceDate = '';
+  let activeAttendanceScope = 'today';
 
   // ── Toast Notification System ──────────────────────────────────────────────
   (function setupToastSystem() {
@@ -118,7 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('searchInput');
   const workshopFilter = document.getElementById('workshopFilter');
   const counselorFilter = document.getElementById('counselorFilter');
+  const recordScopeFilter = document.getElementById('recordScopeFilter');
   const dateFilter = document.getElementById('dateFilter');
+  const todayShortcutBtn = document.getElementById('todayShortcutBtn');
   const timeFilter = document.getElementById('timeFilter');
   const timeFilterCondition = document.getElementById('timeFilterCondition');
   const durationFilter = document.getElementById('durationFilter');
@@ -142,12 +145,34 @@ document.addEventListener('DOMContentLoaded', () => {
     return getDateKeyInTimezone(new Date());
   }
 
-  function ensureActiveAttendanceDate() {
-    if (!dateFilter.value) {
+  function getSelectedAttendanceScope() {
+    return recordScopeFilter?.value || 'today';
+  }
+
+  function ensureActiveAttendanceDate(scope = getSelectedAttendanceScope()) {
+    if (scope === 'today') {
+      dateFilter.value = getCurrentWorkshopDate();
+    } else if (!dateFilter.value) {
       dateFilter.value = getCurrentWorkshopDate();
     }
     activeAttendanceDate = dateFilter.value;
     return activeAttendanceDate;
+  }
+
+  function syncDateFilterState() {
+    const scope = getSelectedAttendanceScope();
+    const useDateInput = scope !== 'all';
+    dateFilter.disabled = !useDateInput;
+
+    if (todayShortcutBtn) {
+      todayShortcutBtn.disabled = scope === 'today';
+    }
+
+    if (scope === 'today') {
+      dateFilter.value = getCurrentWorkshopDate();
+    } else if (!dateFilter.value) {
+      dateFilter.value = getCurrentWorkshopDate();
+    }
   }
 
   function renderAttendanceLoadingState() {
@@ -164,13 +189,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Fetch Attendance Data
-  async function fetchAttendance(targetDate = ensureActiveAttendanceDate()) {
+  async function fetchAttendance(options = {}) {
+    const requestedScope = options.scope || getSelectedAttendanceScope();
+    const targetDate = options.date || ensureActiveAttendanceDate(requestedScope);
     isAttendanceLoading = true;
     renderAttendanceLoadingState();
     activeAttendanceDate = targetDate;
+    activeAttendanceScope = requestedScope;
 
     try {
-      const response = await fetch(`/api/attendance?date=${encodeURIComponent(targetDate)}`);
+      const params = new URLSearchParams();
+      if (requestedScope === 'all') {
+        params.set('scope', 'all');
+      } else {
+        params.set('date', targetDate);
+      }
+
+      const response = await fetch(`/api/attendance?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch attendance data');
       const data = await response.json();
       attendees = normalizeAttendanceRecords(data.registrations || []);
@@ -554,7 +589,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     tableBody.innerHTML = html.join('');
-    filterStatus.textContent = `Showing ${filteredAttendees.length} of ${attendees.length} records`;
+    const scopeLabel = activeAttendanceScope === 'all'
+      ? 'all dates'
+      : `date ${activeAttendanceDate}`;
+    filterStatus.textContent = `Showing ${filteredAttendees.length} of ${attendees.length} records for ${scopeLabel}`;
     paginationSummary.textContent = `Rows ${startIndex + 1}-${endIndex} of ${sorted.length}`;
     pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
     prevPageBtn.disabled = currentPage === 1;
@@ -566,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const query = searchInput.value.toLowerCase().trim();
     const workshopVal = workshopFilter.value;
     const counselorVal = counselorFilter.value;
-    const dateVal = ensureActiveAttendanceDate(); // YYYY-MM-DD
+    const dateVal = activeAttendanceScope === 'all' ? '' : ensureActiveAttendanceDate(activeAttendanceScope); // YYYY-MM-DD
     const timeVal = timeFilter.value; // HH:MM
     const timeCond = timeFilterCondition.value;
     const durationOption = durationFilter.value;
@@ -734,12 +772,40 @@ document.addEventListener('DOMContentLoaded', () => {
   searchInput.addEventListener('input', debounce(applyFilters, 200));
   workshopFilter.addEventListener('change', applyFilters);
   counselorFilter.addEventListener('change', applyFilters);
-  dateFilter.value = getCurrentWorkshopDate();
+  if (recordScopeFilter) {
+    recordScopeFilter.value = 'today';
+    recordScopeFilter.addEventListener('change', () => {
+      syncDateFilterState();
+      fetchAttendance({
+        scope: getSelectedAttendanceScope(),
+        date: ensureActiveAttendanceDate(getSelectedAttendanceScope())
+      });
+    });
+  }
+  syncDateFilterState();
   dateFilter.addEventListener('change', () => {
+    if (getSelectedAttendanceScope() === 'all') {
+      return;
+    }
     const selectedDate = dateFilter.value || getCurrentWorkshopDate();
     dateFilter.value = selectedDate;
-    fetchAttendance(selectedDate);
+    fetchAttendance({
+      scope: getSelectedAttendanceScope(),
+      date: selectedDate
+    });
   });
+  if (todayShortcutBtn) {
+    todayShortcutBtn.addEventListener('click', () => {
+      if (recordScopeFilter) {
+        recordScopeFilter.value = 'today';
+      }
+      syncDateFilterState();
+      fetchAttendance({
+        scope: 'today',
+        date: getCurrentWorkshopDate()
+      });
+    });
+  }
   timeFilter.addEventListener('input', applyFilters);
   timeFilterCondition.addEventListener('change', applyFilters);
   durationFilter.addEventListener('change', applyFilters);
