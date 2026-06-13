@@ -298,6 +298,43 @@ function formatDateInTimezone(date, tz) {
   }
 }
 
+function getDateKeyInTimezone(date, tz = WORKSHOP_TIMEZONE) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date(date));
+    const mapped = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') {
+        mapped[part.type] = part.value;
+      }
+    }
+    if (!mapped.year || !mapped.month || !mapped.day) {
+      return '';
+    }
+    return `${mapped.year}-${mapped.month}-${mapped.day}`;
+  } catch (err) {
+    console.error('Error formatting date key in timezone:', err);
+    return '';
+  }
+}
+
+function filterRegistrationsByDate(registrations, dateKey) {
+  if (!dateKey) {
+    return registrations;
+  }
+
+  return registrations.filter((registration) => {
+    if (!registration?.createdAt) {
+      return false;
+    }
+    return getDateKeyInTimezone(registration.createdAt) === dateKey;
+  });
+}
+
 async function readSchedule() {
   try {
     await connectMongo();
@@ -854,16 +891,26 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/api/registrations') {
+    const requestedDate = requestUrl.searchParams.get('date') || getDateKeyInTimezone(new Date());
+    const scope = requestUrl.searchParams.get('scope');
     const registrations = await readRegistrations();
-    await enrichRegistrationsWithCounselors(registrations);
-    sendJson(res, 200, { count: registrations.length, registrations });
+    const scopedRegistrations = scope === 'all'
+      ? registrations
+      : filterRegistrationsByDate(registrations, requestedDate);
+    await enrichRegistrationsWithCounselors(scopedRegistrations);
+    sendJson(res, 200, { count: scopedRegistrations.length, registrations: scopedRegistrations, date: requestedDate });
     return;
   }
 
   if (req.method === 'GET' && pathname === '/api/attendance') {
+    const requestedDate = requestUrl.searchParams.get('date') || getDateKeyInTimezone(new Date());
+    const scope = requestUrl.searchParams.get('scope');
     const registrations = await readRegistrations();
-    await enrichRegistrationsWithCounselors(registrations);
-    sendJson(res, 200, { registrations });
+    const scopedRegistrations = scope === 'all'
+      ? registrations
+      : filterRegistrationsByDate(registrations, requestedDate);
+    await enrichRegistrationsWithCounselors(scopedRegistrations);
+    sendJson(res, 200, { registrations: scopedRegistrations, date: requestedDate });
     return;
   }
 

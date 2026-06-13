@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let schedulesCache = [];
   let currentPage = 1;
   let isAttendanceLoading = true;
+  let activeAttendanceDate = '';
 
   // ── Toast Notification System ──────────────────────────────────────────────
   (function setupToastSystem() {
@@ -137,6 +138,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const exportCsvBtn = document.getElementById('exportCsv');
   const exportExcelBtn = document.getElementById('exportExcel');
 
+  function getCurrentWorkshopDate() {
+    return getDateKeyInTimezone(new Date());
+  }
+
+  function ensureActiveAttendanceDate() {
+    if (!dateFilter.value) {
+      dateFilter.value = getCurrentWorkshopDate();
+    }
+    activeAttendanceDate = dateFilter.value;
+    return activeAttendanceDate;
+  }
+
   function renderAttendanceLoadingState() {
     tableBody.innerHTML = `
       <tr>
@@ -151,12 +164,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Fetch Attendance Data
-  async function fetchAttendance() {
+  async function fetchAttendance(targetDate = ensureActiveAttendanceDate()) {
     isAttendanceLoading = true;
     renderAttendanceLoadingState();
+    activeAttendanceDate = targetDate;
 
     try {
-      const response = await fetch('/api/attendance');
+      const response = await fetch(`/api/attendance?date=${encodeURIComponent(targetDate)}`);
       if (!response.ok) throw new Error('Failed to fetch attendance data');
       const data = await response.json();
       attendees = normalizeAttendanceRecords(data.registrations || []);
@@ -166,7 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
       populateCounselors();
 
       filteredAttendees = [...attendees];
-      calculateMetrics();
       isAttendanceLoading = false;
       applyFilters();
     } catch (error) {
@@ -398,11 +411,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Calculate Metrics
   function calculateMetrics() {
-    const total = attendees.length;
-    const attended = attendees.filter(a => (a.effectiveJoinedDuration || 0) > 0).length;
-    const certified = attendees.filter(a => (a.effectiveJoinedDuration || 0) >= 60).length;
+    const dataset = filteredAttendees;
+    const total = dataset.length;
+    const attended = dataset.filter(a => (a.effectiveJoinedDuration || 0) > 0).length;
+    const certified = dataset.filter(a => (a.effectiveJoinedDuration || 0) >= 60).length;
     
-    const totalDuration = attendees.reduce((acc, a) => acc + (a.effectiveJoinedDuration || 0), 0);
+    const totalDuration = dataset.reduce((acc, a) => acc + (a.effectiveJoinedDuration || 0), 0);
     const avgDuration = attended > 0 ? Math.round(totalDuration / attended) : 0;
 
     statTotal.textContent = total;
@@ -552,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const query = searchInput.value.toLowerCase().trim();
     const workshopVal = workshopFilter.value;
     const counselorVal = counselorFilter.value;
-    const dateVal = dateFilter.value; // YYYY-MM-DD
+    const dateVal = ensureActiveAttendanceDate(); // YYYY-MM-DD
     const timeVal = timeFilter.value; // HH:MM
     const timeCond = timeFilterCondition.value;
     const durationOption = durationFilter.value;
@@ -605,6 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     currentPage = 1;
+    calculateMetrics();
     renderTable();
     renderCounselorBreakdown();
   }
@@ -719,7 +734,12 @@ document.addEventListener('DOMContentLoaded', () => {
   searchInput.addEventListener('input', debounce(applyFilters, 200));
   workshopFilter.addEventListener('change', applyFilters);
   counselorFilter.addEventListener('change', applyFilters);
-  dateFilter.addEventListener('input', applyFilters);
+  dateFilter.value = getCurrentWorkshopDate();
+  dateFilter.addEventListener('change', () => {
+    const selectedDate = dateFilter.value || getCurrentWorkshopDate();
+    dateFilter.value = selectedDate;
+    fetchAttendance(selectedDate);
+  });
   timeFilter.addEventListener('input', applyFilters);
   timeFilterCondition.addEventListener('change', applyFilters);
   durationFilter.addEventListener('change', applyFilters);
