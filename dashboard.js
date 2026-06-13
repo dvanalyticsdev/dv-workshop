@@ -906,6 +906,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordInput = document.getElementById('passwordInput');
   const passwordError = document.getElementById('passwordError');
   const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+  const passwordSubmitBtn = document.getElementById('passwordSubmitBtn');
+
+  function revealDashboard() {
+    passwordError.classList.add('hidden');
+
+    if (passwordScreen) {
+      passwordScreen.classList.add('fade-out');
+      setTimeout(() => {
+        document.documentElement.classList.remove('needs-auth');
+        document.documentElement.classList.add('is-authenticated');
+        passwordScreen.style.display = 'none';
+      }, 400);
+      return;
+    }
+
+    document.documentElement.classList.remove('needs-auth');
+    document.documentElement.classList.add('is-authenticated');
+  }
+
+  function showPasswordFailure(message) {
+    passwordError.textContent = message || 'Incorrect password. Please try again.';
+    passwordError.classList.remove('hidden');
+    passwordError.classList.remove('shake');
+    void passwordError.offsetWidth;
+    passwordError.classList.add('shake');
+    passwordInput.value = '';
+    passwordInput.focus();
+  }
+
+  async function checkDashboardAuthStatus() {
+    const response = await fetch('/api/dashboard-auth/status', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Failed to verify dashboard access.');
+    }
+
+    const data = await response.json();
+    return Boolean(data.authenticated);
+  }
 
   function setupAuth() {
     // Password visibility toggle
@@ -923,40 +961,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (passwordForm) {
-      passwordForm.addEventListener('submit', (e) => {
+      passwordForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const pwd = passwordInput.value;
-        const correctPassword = 'dv@dev@2010@analytics';
 
-        if (pwd === correctPassword) {
-          // Success!
-          passwordError.classList.add('hidden');
-          sessionStorage.setItem('attendance_auth', correctPassword);
-          
-          // Animate transition
-          if (passwordScreen) {
-            passwordScreen.classList.add('fade-out');
-            setTimeout(() => {
-              document.documentElement.classList.remove('needs-auth');
-              document.documentElement.classList.add('is-authenticated');
-              passwordScreen.style.display = 'none';
-            }, 400); // matches fade-out duration
-          } else {
-            document.documentElement.classList.remove('needs-auth');
-            document.documentElement.classList.add('is-authenticated');
+        try {
+          if (passwordSubmitBtn) {
+            passwordSubmitBtn.disabled = true;
+            passwordSubmitBtn.textContent = 'Verifying...';
           }
-          
-          // Load data
+
+          const response = await fetch('/api/dashboard-auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pwd })
+          });
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Incorrect password. Please try again.');
+          }
+
+          revealDashboard();
           fetchAttendance();
           fetchSchedule();
-        } else {
-          // Failure
-          passwordError.classList.remove('hidden');
-          passwordError.classList.remove('shake');
-          void passwordError.offsetWidth; // trigger reflow to restart animation
-          passwordError.classList.add('shake');
-          passwordInput.value = '';
-          passwordInput.focus();
+        } catch (error) {
+          showPasswordFailure(error.message);
+        } finally {
+          if (passwordSubmitBtn) {
+            passwordSubmitBtn.disabled = false;
+            passwordSubmitBtn.textContent = 'Verify & Access';
+          }
         }
       });
     }
@@ -1248,11 +1283,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Initialize
-  const authVal = sessionStorage.getItem('attendance_auth');
-  if (authVal === 'dv@dev@2010@analytics') {
-    fetchAttendance();
-    fetchSchedule();
-  } else {
-    setupAuth();
-  }
+  setupAuth();
+  checkDashboardAuthStatus()
+    .then((isAuthenticated) => {
+      if (!isAuthenticated) {
+        return;
+      }
+
+      revealDashboard();
+      fetchAttendance();
+      fetchSchedule();
+    })
+    .catch((error) => {
+      console.error('Dashboard auth check failed:', error);
+    });
 });

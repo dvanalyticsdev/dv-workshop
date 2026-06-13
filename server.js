@@ -55,6 +55,9 @@ const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
 const ZOOM_SDK_KEY = process.env.ZOOM_SDK_KEY || '';
 const ZOOM_SDK_SECRET = process.env.ZOOM_SDK_SECRET || '';
 const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || '';
+const ADMIN_DASHBOARD_PASSWORD = process.env.ADMIN_DASHBOARD_PASSWORD || '';
+const DASHBOARD_AUTH_COOKIE_NAME = 'dv_dashboard_auth';
+const DASHBOARD_AUTH_COOKIE_MAX_AGE = 60 * 60 * 8;
 
 // Workshop gate — set these in .env to control when registrations open
 const WORKSHOP_START_TIME = process.env.WORKSHOP_START_TIME || '19:00'; // HH:MM 24-hr
@@ -777,6 +780,76 @@ function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function parseCookies(req) {
+  const rawCookie = req.headers.cookie || '';
+  const cookies = {};
+
+  for (const part of rawCookie.split(';')) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex === -1) continue;
+    const key = trimmed.slice(0, equalsIndex).trim();
+    const value = trimmed.slice(equalsIndex + 1).trim();
+    cookies[key] = decodeURIComponent(value);
+  }
+
+  return cookies;
+}
+
+function isMatchingSecret(actualValue, expectedValue) {
+  const actual = Buffer.from(String(actualValue || ''), 'utf8');
+  const expected = Buffer.from(String(expectedValue || ''), 'utf8');
+
+  if (!expected.length || actual.length !== expected.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(actual, expected);
+}
+
+function createDashboardAuthCookieValue() {
+  return crypto
+    .createHash('sha256')
+    .update(`dashboard-auth:${ADMIN_DASHBOARD_PASSWORD}`)
+    .digest('hex');
+}
+
+function isDashboardAuthenticated(req) {
+  if (!ADMIN_DASHBOARD_PASSWORD) {
+    return false;
+  }
+
+  const cookies = parseCookies(req);
+  return isMatchingSecret(cookies[DASHBOARD_AUTH_COOKIE_NAME], createDashboardAuthCookieValue());
+}
+
+function setDashboardAuthCookie(res) {
+  const isSecure = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+  const cookieParts = [
+    `${DASHBOARD_AUTH_COOKIE_NAME}=${encodeURIComponent(createDashboardAuthCookieValue())}`,
+    'HttpOnly',
+    'Path=/',
+    `Max-Age=${DASHBOARD_AUTH_COOKIE_MAX_AGE}`,
+    'SameSite=Lax'
+  ];
+
+  if (isSecure) {
+    cookieParts.push('Secure');
+  }
+
+  res.setHeader('Set-Cookie', cookieParts.join('; '));
+}
+
+function requireDashboardAuth(req, res) {
+  if (isDashboardAuthenticated(req)) {
+    return true;
+  }
+
+  sendJson(res, 401, { error: 'Unauthorized' });
+  return false;
+}
+
 async function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -884,6 +957,33 @@ const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const { pathname } = requestUrl;
 
+  if (req.method === 'GET' && pathname === '/api/dashboard-auth/status') {
+    sendJson(res, 200, { authenticated: isDashboardAuthenticated(req) });
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/dashboard-auth/login') {
+    try {
+      if (!ADMIN_DASHBOARD_PASSWORD) {
+        sendJson(res, 503, { error: 'Dashboard password is not configured on the server.' });
+        return;
+      }
+
+      const body = await readBody(req);
+      if (!isMatchingSecret(body.password, ADMIN_DASHBOARD_PASSWORD)) {
+        sendJson(res, 401, { error: 'Incorrect password. Please try again.' });
+        return;
+      }
+
+      setDashboardAuthCookie(res);
+      sendJson(res, 200, { ok: true });
+      return;
+    } catch (error) {
+      sendJson(res, 400, { error: error.message || 'Unable to verify password.' });
+      return;
+    }
+  }
+
   if (req.method === 'GET' && pathname === '/api/status') {
     const status = await getWorkshopStatus();
     sendJson(res, 200, status);
@@ -891,6 +991,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/api/registrations') {
+    if (!requireDashboardAuth(req, res)) {
+      return;
+    }
     const requestedDate = requestUrl.searchParams.get('date') || getDateKeyInTimezone(new Date());
     const scope = requestUrl.searchParams.get('scope');
     const registrations = await readRegistrations();
@@ -903,6 +1006,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/api/attendance') {
+    if (!requireDashboardAuth(req, res)) {
+      return;
+    }
     const requestedDate = requestUrl.searchParams.get('date') || getDateKeyInTimezone(new Date());
     const scope = requestUrl.searchParams.get('scope');
     const registrations = await readRegistrations();
@@ -915,6 +1021,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && pathname === '/api/attendance/clear') {
+    if (!requireDashboardAuth(req, res)) {
+      return;
+    }
     try {
       await connectMongo();
       if (attendeesCollection) {
@@ -941,6 +1050,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && pathname === '/api/schedule') {
+    if (!requireDashboardAuth(req, res)) {
+      return;
+    }
     try {
       const body = await readBody(req);
       const { startTime, endTime } = body;
@@ -982,6 +1094,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && pathname === '/api/schedule/delete') {
+    if (!requireDashboardAuth(req, res)) {
+      return;
+    }
     try {
       const body = await readBody(req);
       const { id } = body;

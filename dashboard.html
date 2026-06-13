@@ -11,12 +11,7 @@
   <link rel="stylesheet" href="style-light.css">
   <script>
     (function() {
-      const auth = sessionStorage.getItem('attendance_auth');
-      if (auth === 'dv@dev@2010@analytics') {
-        document.documentElement.classList.add('is-authenticated');
-      } else {
-        document.documentElement.classList.add('needs-auth');
-      }
+      document.documentElement.classList.add('needs-auth');
     })();
   </script>
   <style>
