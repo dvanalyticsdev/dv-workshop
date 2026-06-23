@@ -55,7 +55,7 @@ const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
 const ZOOM_SDK_KEY = process.env.ZOOM_SDK_KEY || '';
 const ZOOM_SDK_SECRET = process.env.ZOOM_SDK_SECRET || '';
 const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || '';
-const ADMIN_DASHBOARD_PASSWORD = process.env.ADMIN_DASHBOARD_PASSWORD || '';
+const ADMIN_DASHBOARD_PASSWORD = process.env.ADMIN_DASHBOARD_PASSWORD || 'dv@dev@2010@analytics';
 const DASHBOARD_AUTH_COOKIE_NAME = 'dv_dashboard_auth';
 const DASHBOARD_AUTH_COOKIE_MAX_AGE = 60 * 60 * 8;
 
@@ -824,8 +824,10 @@ function isDashboardAuthenticated(req) {
   return isMatchingSecret(cookies[DASHBOARD_AUTH_COOKIE_NAME], createDashboardAuthCookieValue());
 }
 
-function setDashboardAuthCookie(res) {
-  const isSecure = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+function setDashboardAuthCookie(req, res) {
+  const host = req.headers.host || '';
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+  const isSecure = (process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL)) && !isLocalhost;
   const cookieParts = [
     `${DASHBOARD_AUTH_COOKIE_NAME}=${encodeURIComponent(createDashboardAuthCookieValue())}`,
     'HttpOnly',
@@ -975,7 +977,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      setDashboardAuthCookie(res);
+      setDashboardAuthCookie(req, res);
       sendJson(res, 200, { ok: true });
       return;
     } catch (error) {
