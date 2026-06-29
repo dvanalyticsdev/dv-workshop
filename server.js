@@ -55,7 +55,7 @@ const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
 const ZOOM_SDK_KEY = process.env.ZOOM_SDK_KEY || '';
 const ZOOM_SDK_SECRET = process.env.ZOOM_SDK_SECRET || '';
 const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || '';
-const ADMIN_DASHBOARD_PASSWORD = process.env.ADMIN_DASHBOARD_PASSWORD || 'dv@dev@2010@analytics';
+const ADMIN_DASHBOARD_PASSWORD = process.env.ADMIN_DASHBOARD_PASSWORD || 'H7#cN3@tW8!qR5$zK1';
 const DASHBOARD_AUTH_COOKIE_NAME = 'dv_dashboard_auth';
 const DASHBOARD_AUTH_COOKIE_MAX_AGE = 60 * 60 * 8;
 

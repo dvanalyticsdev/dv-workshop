@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style-light.css">
+  <script src="theme-bootstrap.js"></script>
   <script>
     (function() {
       document.documentElement.classList.add('needs-auth');
@@ -32,10 +33,7 @@
       display: grid;
       place-items: center;
       padding: 24px;
-      background:
-        radial-gradient(circle at top left, rgba(255, 106, 26, 0.15), transparent 30%),
-        radial-gradient(circle at right 18%, rgba(75, 123, 255, 0.15), transparent 28%),
-        linear-gradient(145deg, #f5f7fb, #edf2f8);
+      background: var(--bg);
       opacity: 1;
       transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -46,7 +44,10 @@
     .password-card {
       width: min(420px, 100%);
       padding: 36px;
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
       text-align: center;
       animation: cardEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
@@ -63,19 +64,21 @@
     .password-logo {
       width: 180px;
       margin-bottom: 24px;
-      filter: drop-shadow(0 8px 16px rgba(18, 32, 51, 0.08));
+    }
+    html[data-theme="dark"] .password-logo {
+      filter: brightness(0.9) invert(1) hue-rotate(180deg);
     }
     .password-header h2 {
       font-size: 1.8rem;
       font-weight: 800;
       letter-spacing: -0.04em;
       margin: 0 0 10px;
-      color: var(--text);
+      color: var(--heading);
     }
     .password-header p {
       font-size: 0.92rem;
       line-height: 1.5;
-      color: var(--muted);
+      color: var(--text-muted);
       margin: 0 0 28px;
     }
     .password-form {
@@ -88,19 +91,18 @@
     }
     .password-form input {
       width: 100%;
-      border-radius: var(--radius-md);
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.8);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--input-bg);
       color: var(--text);
-      padding: 16px 48px 16px 18px;
+      padding: 14px 48px 14px 16px;
       outline: none;
-      transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
       font-size: 1rem;
     }
     .password-form input:focus {
-      border-color: var(--accent);
-      background: #fff;
-      box-shadow: 0 0 0 4px rgba(255, 106, 26, 0.12);
+      border-color: var(--primary);
+      box-shadow: var(--input-shadow);
     }
     .toggle-password-btn {
       position: absolute;
@@ -111,7 +113,7 @@
       border: none;
       padding: 4px;
       cursor: pointer;
-      color: var(--muted);
+      color: var(--text-muted);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -122,7 +124,7 @@
     }
     .error-msg {
       margin: 4px 0 0;
-      color: #ef4444;
+      color: var(--danger);
       font-size: 0.88rem;
       font-weight: 600;
       text-align: left;
@@ -137,16 +139,15 @@
     }
     .password-form .form-btn {
       width: 100%;
-      border-radius: 999px;
-      background: linear-gradient(135deg, var(--accent), #ff8e55);
+      border-radius: var(--radius-sm);
+      background: var(--primary);
       color: #fff;
-      box-shadow: 0 16px 36px rgba(255, 106, 26, 0.22);
-      font-weight: 800;
-      transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+      font-weight: 700;
+      box-shadow: none;
+      transition: opacity 150ms ease;
     }
     .password-form .form-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 20px 40px rgba(255, 106, 26, 0.3);
+      opacity: 0.95;
     }
 
     /* Dashboard Specific Overrides and Enhancements */
@@ -168,13 +169,16 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
 
     .metric-title {
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.12em;
-      color: var(--muted);
+      color: var(--text-muted);
       font-weight: 700;
     }
 
@@ -187,7 +191,7 @@
 
     .metric-desc {
       font-size: 0.85rem;
-      color: var(--muted);
+      color: var(--text-muted);
     }
 
     .dashboard-controls {
@@ -198,6 +202,9 @@
       padding: 24px;
       border-radius: var(--radius-lg);
       margin-bottom: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
 
     .search-filter-group {
@@ -211,7 +218,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-top: 1px solid var(--line);
+      border-top: 1px solid var(--border);
       padding-top: 20px;
       margin-top: 8px;
       width: 100%;
@@ -230,24 +237,24 @@
     .control-item label {
       font-size: 0.82rem;
       font-weight: 700;
-      color: var(--muted);
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
     .control-input {
-      border-radius: var(--radius-md);
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.8);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--input-bg);
       color: var(--text);
       padding: 12px 16px;
       outline: none;
-      transition: border-color 180ms ease, background 180ms ease;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
     }
 
     .control-input:focus {
-      border-color: var(--accent);
-      background: #fff;
+      border-color: var(--primary);
+      box-shadow: var(--input-shadow);
     }
 
     .export-group {
@@ -261,37 +268,35 @@
       align-items: center;
       gap: 8px;
       padding: 12px 20px;
-      border-radius: 999px;
+      border-radius: var(--radius-sm);
       font-weight: 700;
       font-size: 0.9rem;
       cursor: pointer;
-      border: 1px solid var(--line);
-      transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
-      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid var(--border);
+      background: var(--surface);
       color: var(--text);
+      transition: background 150ms ease, border-color 150ms ease;
     }
 
     .export-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(18, 32, 51, 0.08);
-      background: #fff;
+      background: var(--surface-muted);
     }
 
     .export-btn.btn-csv {
-      border-color: rgba(75, 123, 255, 0.3);
-      color: var(--accent-2);
+      border-color: var(--border-strong);
+      color: var(--text);
     }
 
     .export-btn.btn-excel {
-      border-color: rgba(255, 106, 26, 0.3);
-      color: var(--accent);
+      border-color: var(--primary);
+      color: var(--primary);
     }
 
     .table-container {
       border-radius: var(--radius-lg);
-      border: 1px solid var(--line);
-      background: var(--glass);
-      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
 
@@ -309,19 +314,24 @@
       text-align: left;
     }
 
+    .attendance-table tr td {
+      background: var(--surface);
+      color: var(--text);
+    }
+
     .attendance-table th,
     .attendance-table td {
       padding: 18px 24px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--border);
     }
 
     .attendance-table th {
       font-size: 0.85rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: var(--muted);
+      color: var(--text-muted);
       font-weight: 700;
-      background: rgba(255, 255, 255, 0.4);
+      background: var(--surface-muted);
     }
 
     .attendance-table tr:last-child td {
@@ -329,7 +339,7 @@
     }
 
     .attendance-table tr:hover td {
-      background: rgba(255, 255, 255, 0.25);
+      background: var(--row-hover);
     }
 
     .pagination-bar {
@@ -338,14 +348,14 @@
       justify-content: space-between;
       gap: 16px;
       padding: 18px 24px;
-      border-top: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.22);
+      border-top: 1px solid var(--border);
+      background: var(--surface-muted);
       flex-wrap: wrap;
     }
 
     .pagination-summary {
       font-size: 0.85rem;
-      color: var(--muted);
+      color: var(--text-muted);
       font-weight: 600;
     }
 
@@ -369,7 +379,7 @@
       display: inline-flex;
       align-items: center;
       padding: 4px 12px;
-      border-radius: 999px;
+      border-radius: var(--radius-sm);
       font-weight: 700;
       font-size: 0.75rem;
       text-transform: uppercase;
@@ -377,28 +387,28 @@
     }
 
     .badge-certified {
-      background: rgba(75, 123, 255, 0.12);
-      color: var(--accent-2);
-    }
-
-    .badge-attended {
-      background: rgba(255, 106, 26, 0.12);
+      background: var(--accent-soft);
       color: var(--accent);
     }
 
+    .badge-attended {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
     .badge-short {
-      background: rgba(18, 32, 51, 0.08);
-      color: var(--muted);
+      background: var(--surface-muted);
+      color: var(--text-muted);
     }
 
     .badge-on {
-      background: rgba(16, 185, 129, 0.12);
-      color: #10b981;
+      background: var(--success-soft);
+      color: var(--success);
     }
 
     .badge-off {
-      background: rgba(239, 68, 68, 0.12);
-      color: #ef4444;
+      background: var(--danger-soft);
+      color: var(--danger);
     }
 
     .empty-state h3 {
@@ -408,12 +418,12 @@
 
     /* Counselor Breakdown & Separator Rows */
     .counselor-breakdown-card {
-      background: var(--glass);
-      backdrop-filter: blur(24px);
-      border: 1px solid var(--line);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 24px;
       margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
     }
 
     .counselor-stat-list {
@@ -423,26 +433,24 @@
     }
 
     .counselor-stat-pill {
-      background: rgba(255, 255, 255, 0.45);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
       padding: 14px 18px;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+      transition: background 150ms ease;
     }
 
     .counselor-stat-pill:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(18, 32, 51, 0.05);
-      background: rgba(255, 255, 255, 0.65);
+      background: var(--row-hover);
     }
 
     .counselor-stat-name {
       font-size: 0.82rem;
       font-weight: 700;
-      color: var(--muted);
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -456,20 +464,20 @@
 
     .counselor-stat-attended {
       font-size: 0.8rem;
-      color: var(--muted);
+      color: var(--text-muted);
       font-weight: 500;
     }
 
     .counselor-group-row {
-      background: rgba(75, 123, 255, 0.04) !important;
+      background: var(--accent-soft) !important;
     }
 
     .counselor-group-cell {
       font-weight: 700;
       font-size: 0.92rem;
-      color: var(--accent-2);
-      border-bottom: 1px solid var(--line);
-      background: rgba(75, 123, 255, 0.04);
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      background: var(--accent-soft);
       padding: 14px 24px !important;
     }
 
@@ -517,9 +525,12 @@
   <header class="topbar glass-shell">
     <div class="brand-wrap">
       <img src="Logos/DV-Logo.png" alt="DV Analytics" class="brand-logo">
-      <span style="font-weight: 700; color: var(--muted);">| Host Portal</span>
+      <span style="font-weight: 700; color: var(--text-muted);">| Host Portal</span>
     </div>
-    <a href="/" class="secondary-btn" style="min-height: 40px; padding: 0 16px; font-size: 0.85rem; border-radius: 999px;">View Landing Page</a>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <button id="themeToggleBtn" class="secondary-btn" aria-label="Toggle Theme" style="width: 40px; height: 40px; min-height: 40px; border-radius: 4px; padding: 0; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;"></button>
+      <a href="/" class="secondary-btn" style="min-height: 40px; padding: 0 16px; font-size: 0.85rem; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text); display: inline-flex; align-items: center; justify-content: center; font-weight: 700;">View Landing Page</a>
+    </div>
   </header>
 
   <main class="dashboard-shell">
@@ -755,6 +766,7 @@
     </div>
   </main>
 
+  <script src="theme.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

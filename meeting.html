@@ -9,8 +9,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style-light.css">
+  <script src="theme-bootstrap.js"></script>
 </head>
 <body class="meeting-body">
+  <div style="position: fixed; top: 16px; right: 16px; z-index: 1000;">
+    <button id="themeToggleBtn" class="secondary-btn" aria-label="Toggle Theme" style="width: 40px; height: 40px; min-height: 40px; border-radius: 4px; padding: 0; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;"></button>
+  </div>
   <div class="bg-orb orb-1"></div>
   <div class="bg-orb orb-2"></div>
   <div class="bg-grid"></div>
@@ -38,6 +42,7 @@
   <script defer src="https://source.zoom.us/6.0.2/lib/vendor/redux.min.js"></script>
   <script defer src="https://source.zoom.us/6.0.2/lib/vendor/redux-thunk.min.js"></script>
   <script defer src="https://source.zoom.us/6.0.2/zoom-meeting-6.0.2.min.js"></script>
+  <script defer src="theme.js"></script>
   <script defer src="meeting.js"></script>
 </body>
 </html>
