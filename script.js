@@ -9,7 +9,7 @@ const waitingPopup = document.getElementById('waitingPopup');
 const waitingPopupCopy = document.getElementById('waitingPopupCopy');
 
 // Configuration for workshop name
-const WORKSHOP_NAME = 'Gen AI';
+const WORKSHOP_NAME = 'Cybersecurity';
 
 let modalHideTimer = null;
 let waitPollTimer = null;
