@@ -50,6 +50,7 @@ const DATA_DIR = path.join(ROOT, 'data');
 const REGISTRATIONS_FILE = path.join(DATA_DIR, 'registrations.json');
 const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
 const PORT = Number(process.env.PORT || 3000);
+const DEPLOY_VERSION_FILE = path.join(ROOT, '.version');
 const ZOOM_MEETING_ID = String(process.env.ZOOM_MEETING_ID || '').replace(/\D/g, '');
 const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
 const ZOOM_SDK_KEY = process.env.ZOOM_SDK_KEY || '';
@@ -82,6 +83,9 @@ const MONGO_PASS     = process.env.MONGODB_PASS     || '';
 const MONGO_APP_NAME = process.env.MONGODB_APP_NAME || 'Dv-data';
 const DB_NAME        = process.env.MONGODB_DB_NAME  || 'Workshop-Joining-Data';
 const COLLECTION_NAME = 'attendees';
+const CRM_DB_NAME = process.env.CRM_MONGODB_DB_NAME || 'i-crm-workshop';
+const CRM_LEADS_COLLECTION_NAME = process.env.CRM_LEADS_COLLECTION_NAME || 'leads';
+const CRM_LEAD_OWNER_FIELD = process.env.CRM_LEAD_OWNER_FIELD || 'counselor';
 
 let mongoClient = null;
 let db = null;
@@ -236,14 +240,18 @@ async function enrichRegistrationsWithCounselors(registrations) {
     // Attempt to connect to Mongo if not connected
     await connectMongo();
     if (mongoClient) {
-      const crmDb = mongoClient.db('i-crm-workshop');
-      const leads = await crmDb.collection('leads').find({}, { projection: { phone: 1, counselor: 1 } }).toArray();
+      const crmDb = mongoClient.db(CRM_DB_NAME);
+      const leads = await crmDb.collection(CRM_LEADS_COLLECTION_NAME).find(
+        {},
+        { projection: { phone: 1, [CRM_LEAD_OWNER_FIELD]: 1 } }
+      ).toArray();
       const leadMap = new Map();
       for (const lead of leads) {
-        if (lead.phone && lead.counselor) {
+        const owner = lead[CRM_LEAD_OWNER_FIELD];
+        if (lead.phone && owner) {
           const corePhone = getCore10Digits(lead.phone);
           if (corePhone) {
-            leadMap.set(corePhone, lead.counselor);
+            leadMap.set(corePhone, owner);
           }
         }
       }
@@ -958,6 +966,22 @@ async function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const { pathname } = requestUrl;
+
+  if (req.method === 'GET' && pathname === '/healthz') {
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/version') {
+    let version = 'local';
+    try {
+      version = (await fs.readFile(DEPLOY_VERSION_FILE, 'utf8')).trim() || version;
+    } catch {
+      // Local development may not have a deployment version file.
+    }
+    sendJson(res, 200, { ok: true, version });
+    return;
+  }
 
   if (req.method === 'GET' && pathname === '/api/dashboard-auth/status') {
     sendJson(res, 200, { authenticated: isDashboardAuthenticated(req) });

@@ -63,6 +63,41 @@ Common integrations used by this project:
 - Optional Vercel deployment via `vercel.json`
 - Optional database-backed persistence in serverless deployment paths
 
+Important MongoDB separation:
+- `MONGODB_DB_NAME` is this workshop project's own database for attendees and schedules.
+- `CRM_MONGODB_DB_NAME` is the separate CRM database used only to look up lead owners.
+- `CRM_LEADS_COLLECTION_NAME` defaults to `leads`.
+- `CRM_LEAD_OWNER_FIELD` defaults to `counselor`.
+- The workshop dashboard maps owners by comparing the last 10 digits of the attendee phone number with CRM lead phone numbers.
+
+## VPS deployment
+
+Production hostname:
+- `https://workshop.dvanalyticsmds.in`
+
+Recommended VPS separation:
+- CRM app folder: `/var/www/i-crm`
+- Workshop app folder: `/var/www/dv-workshop`
+- CRM PM2 app: `i-crm`
+- Workshop PM2 app: `dv-workshop`
+- CRM local port: `3000`
+- Workshop local port: `3001`
+
+Deployment helper:
+```bash
+./deploy-workshop.ps1
+```
+
+The script mirrors the CRM deployment flow:
+- pushes `main` to GitHub
+- SSHes to `deploy@200.141.15.110`
+- pulls the latest code in `/var/www/dv-workshop`
+- installs production dependencies
+- starts or reloads PM2 app `dv-workshop`
+- verifies `http://127.0.0.1:3001/healthz`
+
+Nginx should proxy `workshop.dvanalyticsmds.in` to `http://127.0.0.1:3001`.
+
 ## Notes
 - Local workshop data is kept in the `data/` folder for the Node runtime flow.
 - The dashboard and meeting flows are active parts of the current build and should be documented together with the landing page, not treated as separate projects.
