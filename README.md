@@ -65,6 +65,7 @@ Common integrations used by this project:
 
 Important MongoDB separation:
 - `MONGODB_DB_NAME` is this workshop project's own database for attendees and schedules.
+- `MONGODB_URI` can point the workshop app at a direct MongoDB server, for example the VPS-local MongoDB.
 - `CRM_MONGODB_DB_NAME` is the separate CRM database used only to look up lead owners.
 - `CRM_LEADS_COLLECTION_NAME` defaults to `leads`.
 - `CRM_LEAD_OWNER_FIELD` defaults to `counselor`.

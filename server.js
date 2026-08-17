@@ -77,6 +77,7 @@ const STATIC_FILES = new Map([
 ]);
 
 // MongoDB Setup — credentials loaded from .env (stored separately, no encoding needed)
+const MONGO_URI      = process.env.MONGODB_URI      || '';
 const MONGO_HOST     = process.env.MONGODB_HOST     || '';
 const MONGO_USER     = process.env.MONGODB_USER     || '';
 const MONGO_PASS     = process.env.MONGODB_PASS     || '';
@@ -111,7 +112,7 @@ async function connectMongo() {
 
   if (mongoConnectionFailed) return null; // Credentials missing
 
-  if (!MONGO_HOST || !MONGO_USER || !MONGO_PASS) {
+  if (!MONGO_URI && (!MONGO_HOST || !MONGO_USER || !MONGO_PASS)) {
     console.warn('MongoDB credentials not set in .env — using local file storage.');
     mongoConnectionFailed = true;
     return null;
@@ -124,19 +125,22 @@ async function connectMongo() {
   }
   lastConnectAttemptTime = now;
 
-  // Build the SRV URL without embedding credentials (avoids all encoding issues)
-  const connectionUrl = `mongodb+srv://${MONGO_HOST}/?appName=${encodeURIComponent(MONGO_APP_NAME)}`;
+  const connectionUrl = MONGO_URI || `mongodb+srv://${MONGO_HOST}/?appName=${encodeURIComponent(MONGO_APP_NAME)}`;
+  const mongoOptions = {
+    serverSelectionTimeoutMS: 3000,
+    connectTimeoutMS: 3000
+  };
+
+  if (!MONGO_URI) {
+    mongoOptions.auth = {
+      username: MONGO_USER,
+      password: MONGO_PASS   // Raw plain-text password — no encoding needed here
+    };
+  }
 
   try {
-    console.log(`Connecting to MongoDB Atlas (${MONGO_HOST})...`);
-    mongoClient = new MongoClient(connectionUrl, {
-      auth: {
-        username: MONGO_USER,
-        password: MONGO_PASS   // Raw plain-text password — no encoding needed here
-      },
-      serverSelectionTimeoutMS: 3000,
-      connectTimeoutMS: 3000
-    });
+    console.log(`Connecting to MongoDB (${MONGO_URI ? 'uri' : MONGO_HOST})...`);
+    mongoClient = new MongoClient(connectionUrl, mongoOptions);
     await mongoClient.connect();
     // Confirm the connection is live
     await mongoClient.db('admin').command({ ping: 1 });
