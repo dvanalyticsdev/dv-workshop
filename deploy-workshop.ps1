@@ -1,7 +1,7 @@
 param(
   [string]$Branch = "main",
   [string]$Remote = "origin",
-  [string]$Server = "root@200.141.15.110",
+  [string]$Server = "deploy@200.141.15.110",
   [string]$AppDir = "/var/www/dv-workshop",
   [string]$Pm2Name = "dv-workshop",
   [int]$Port = 3001,
