@@ -56,6 +56,7 @@ const ZOOM_MEETING_PASSWORD = process.env.ZOOM_MEETING_PASSWORD || '';
 const ZOOM_SDK_KEY = process.env.ZOOM_SDK_KEY || '';
 const ZOOM_SDK_SECRET = process.env.ZOOM_SDK_SECRET || '';
 const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || '';
+const GOOGLE_SHEETS_SYNC_TIMEOUT_MS = Number(process.env.GOOGLE_SHEETS_SYNC_TIMEOUT_MS || 5000);
 const ADMIN_DASHBOARD_PASSWORD = process.env.ADMIN_DASHBOARD_PASSWORD || 'H7#cN3@tW8!qR5$zK1';
 const DASHBOARD_AUTH_COOKIE_NAME = 'dv_dashboard_auth';
 const DASHBOARD_AUTH_COOKIE_MAX_AGE = 60 * 60 * 8;
@@ -701,49 +702,53 @@ async function writeRegistration(entry) {
 
 
 async function storeRegistration(entry) {
-  // Always write to MongoDB (so it shows on the attendance dashboard)
-  const mongoPromise = writeRegistration(entry);
+  // Keep the join path fast: wait only for primary storage, then sync Sheets
+  // in the background so a slow Apps Script cannot delay the Zoom redirect.
+  await writeRegistration(entry);
 
-  // Also send to Google Sheets if configured — run both in parallel
   if (GOOGLE_APPS_SCRIPT_URL) {
-    const payload = {
-      fullName: entry.fullName,
-      email: entry.email,
-      phone: entry.phone,
-      workshopName: entry.workshopName || '',
-      date: entry.createdAt
-    };
-
-    const [mongoResult, sheetsResult] = await Promise.allSettled([
-      mongoPromise,
-      fetch(GOOGLE_APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-    ]);
-
-    // Check Google Sheets response
-    if (sheetsResult.status === 'fulfilled' && sheetsResult.value.ok) {
-      return { stored: true, storageNote: 'Saved to MongoDB and Google Sheets.' };
-    }
-
-    const reason = sheetsResult.status === 'rejected'
-      ? sheetsResult.reason?.message
-      : `HTTP ${sheetsResult.value?.status}`;
-
-    return {
-      stored: true,
-      storageNote: `Saved to MongoDB. Google Sheets failed: ${reason}`
-    };
+    syncRegistrationToGoogleSheets(entry);
   }
 
-  // No Google Sheets — just wait for MongoDB write to finish
-  await mongoPromise;
   return {
     stored: true,
-    storageNote: 'Saved to MongoDB.'
+    storageNote: GOOGLE_APPS_SCRIPT_URL
+      ? 'Saved to MongoDB. Google Sheets sync queued.'
+      : 'Saved to MongoDB.'
   };
+}
+
+function syncRegistrationToGoogleSheets(entry) {
+  const payload = {
+    fullName: entry.fullName,
+    email: entry.email,
+    phone: entry.phone,
+    workshopName: entry.workshopName || '',
+    date: entry.createdAt
+  };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GOOGLE_SHEETS_SYNC_TIMEOUT_MS);
+
+  fetch(GOOGLE_APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: controller.signal
+  })
+    .then((response) => {
+      if (!response.ok) {
+        console.warn(`Google Sheets sync failed: HTTP ${response.status}`);
+      }
+    })
+    .catch((error) => {
+      const reason = error.name === 'AbortError'
+        ? `timed out after ${GOOGLE_SHEETS_SYNC_TIMEOUT_MS}ms`
+        : error.message;
+      console.warn(`Google Sheets sync failed: ${reason}`);
+    })
+    .finally(() => {
+      clearTimeout(timeout);
+    });
 }
 
 function base64UrlEncode(value) {
