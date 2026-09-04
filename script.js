@@ -9,7 +9,7 @@ const waitingPopup = document.getElementById('waitingPopup');
 const waitingPopupCopy = document.getElementById('waitingPopupCopy');
 
 // Configuration for workshop name
-const WORKSHOP_NAME = 'Python + AI';
+const WORKSHOP_NAME = 'PowerBi Workshop'; // Change this to your workshop name
 
 let modalHideTimer = null;
 let waitPollTimer = null;
